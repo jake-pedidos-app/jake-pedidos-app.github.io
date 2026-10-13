@@ -1,0 +1,310 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width,initial-scale=1,viewport-fit=cover">
+<meta name="theme-color" content="#1f5379">
+<link rel="manifest" href="manifest.json">
+<link rel="icon" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Jake Pedidos">
+<title>Jake Pedidos</title>
+<style>
+:root{--az:#1f5379;--az2:#e8f0f6;--ok:#2e8b57;--bad:#c0392b;--bg:#f5f7f9;--tx:#1b2a35;--mut:#6b7c88}
+*{box-sizing:border-box;-webkit-tap-highlight-color:transparent}
+body{margin:0;font-family:system-ui,-apple-system,Segoe UI,Roboto,sans-serif;background:var(--bg);color:var(--tx);padding-bottom:env(safe-area-inset-bottom)}
+header{position:sticky;top:0;z-index:5;background:var(--az);color:#fff;padding:calc(8px + env(safe-area-inset-top)) 12px 0}
+.top{display:flex;align-items:center;gap:10px}
+.top img{height:30px;background:#fff;border-radius:6px;padding:2px 6px}
+.top h1{font-size:17px;margin:0;flex:1}
+.top button{background:rgba(255,255,255,.18);color:#fff;border:0;border-radius:8px;padding:8px 10px;font-size:15px}
+.tabs{display:flex;gap:4px;margin-top:8px}
+.tab{flex:1;text-align:center;padding:10px 4px;font-size:14px;color:#cfe0ec;border-bottom:3px solid transparent;background:none;border:0;border-bottom:3px solid transparent}
+.tab.on{color:#fff;border-bottom-color:#fff;font-weight:600}
+.bar{padding:10px 12px;background:#fff;border-bottom:1px solid #dde4e9;position:sticky;top:var(--hh,96px);z-index:4}
+.bar input{width:100%;padding:11px 12px;border:1px solid #cdd7de;border-radius:10px;font-size:16px}
+.chips{display:flex;gap:6px;margin-top:8px;overflow-x:auto}
+.chip{white-space:nowrap;padding:7px 12px;border-radius:99px;border:1px solid #cdd7de;background:#fff;font-size:13px;color:var(--tx)}
+.chip.on{background:var(--az);color:#fff;border-color:var(--az)}
+#list{padding:10px 12px 80px}
+.card{background:#fff;border-radius:12px;padding:12px;margin-bottom:10px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
+.card .h{display:flex;justify-content:space-between;gap:8px;font-size:12px;color:var(--mut)}
+.card .t{font-weight:600;font-size:16px;margin:4px 0 0}
+.card .s{font-size:13px;color:var(--mut);margin:2px 0}
+.card .c{font-size:14px;margin:2px 0 8px}
+.tg{display:flex;flex-wrap:wrap;gap:6px}
+.tg button{padding:9px 12px;border-radius:10px;border:1px solid #cdd7de;background:#f1f4f6;font-size:14px;color:var(--mut)}
+.tg button.on{background:var(--ok);border-color:var(--ok);color:#fff;font-weight:600}
+.tg button.key{padding:10px 14px}
+.edit{float:right;border:0;background:none;color:var(--az);font-size:14px;padding:0}
+.fecha{font-size:13px;color:var(--az);margin-top:6px}
+.empty,.msg{text-align:center;color:var(--mut);padding:30px 16px}
+#sheet{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;z-index:10}
+#sheet.on{display:flex;align-items:flex-end}
+#sheet .p{background:#fff;width:100%;max-height:92vh;overflow:auto;border-radius:16px 16px 0 0;padding:14px 14px calc(20px + env(safe-area-inset-bottom))}
+.f{margin:10px 0}
+.f label{display:block;font-size:12px;color:var(--mut);margin-bottom:3px}
+.f input[type=text],.f textarea{width:100%;padding:10px;border:1px solid #cdd7de;border-radius:8px;font-size:16px;font-family:inherit}
+.f .sw{display:flex;align-items:center;justify-content:space-between;background:#f1f4f6;border-radius:8px;padding:10px 12px}
+.f .sw input{width:22px;height:22px}
+.row{display:flex;gap:8px;margin-top:14px}
+.row button{flex:1;padding:13px;border-radius:10px;border:0;font-size:16px}
+.pri{background:var(--az);color:#fff}.sec{background:#e3e9ee;color:var(--tx)}
+#toast{position:fixed;left:50%;bottom:calc(20px + env(safe-area-inset-bottom));transform:translateX(-50%);background:#222;color:#fff;padding:10px 16px;border-radius:10px;font-size:14px;display:none;z-index:20;max-width:90%}
+.login{max-width:420px;margin:40px auto;padding:0 20px;text-align:center}
+.login img{width:200px}
+.login button,.login input{width:100%;padding:14px;border-radius:10px;font-size:16px;margin-top:12px}
+.login button{background:var(--az);color:#fff;border:0}
+.login input{border:1px solid #cdd7de}
+.login small{color:var(--mut);display:block;margin-top:14px;line-height:1.4}
+.spin{display:inline-block;width:16px;height:16px;border:2px solid #fff;border-top-color:transparent;border-radius:50%;animation:r .7s linear infinite;vertical-align:-3px}
+@keyframes r{to{transform:rotate(360deg)}}
+</style>
+</head>
+<body>
+<div id="app"></div>
+<div id="sheet"><div class="p" id="sp"></div></div>
+<div id="toast"></div>
+<script src="https://accounts.google.com/gsi/client" async defer></script>
+<script>
+window.JAKE_CLIENT_ID = '952122897469-bf2brihcgrb1t0a3qjksuilt8jiiof02.apps.googleusercontent.com';
+const SPREADSHEET_ID = '1cbTcCFGfIDonIwOzJvqeS1pISPzRSyMaqWu0vM1c66g';
+const SHEETS = [
+  {name:'MercadoLibre', label:'Mercado Libre'},
+  {name:'TiendaNube', label:'Tienda Nube'},
+  {name:'Wsp y Reclamos', label:'WhatsApp / Reclamos'}
+];
+const API = 'https://sheets.googleapis.com/v4/spreadsheets/' + SPREADSHEET_ID;
+const $ = s => document.querySelector(s);
+const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const ls = {get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};
+
+let token = null, tokenExp = 0, tokenClient = null;
+const S = {tab:0, q:'', filter:'pend', data:{}, loading:false};
+
+function toast(m, ms=2200){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',ms)}
+
+/* ---------- Auth ---------- */
+function clientId(){return ls.get('cid')||(window.JAKE_CLIENT_ID||'')}
+function initToken(){
+  if(!window.google||!google.accounts) return false;
+  tokenClient = google.accounts.oauth2.initTokenClient({
+    client_id: clientId(),
+    scope: 'https://www.googleapis.com/auth/spreadsheets',
+    callback: ()=>{}
+  });
+  return true;
+}
+function getToken(interactive){
+  return new Promise((res,rej)=>{
+    if(token && Date.now()<tokenExp-60000) return res(token);
+    if(!tokenClient && !initToken()) return rej(new Error('Google todavía no cargó, reintentá.'));
+    tokenClient.callback = r=>{
+      if(r.error) return rej(new Error(r.error));
+      token=r.access_token; tokenExp=Date.now()+(r.expires_in||3600)*1000;
+      ls.set('signed','1'); res(token);
+    };
+    tokenClient.error_callback = e=>rej(new Error(e.type||'login cancelado'));
+    tokenClient.requestAccessToken({prompt: interactive?'select_account':''});
+  });
+}
+async function api(path, opt={}){
+  const t = await getToken(false).catch(()=>getToken(true));
+  const r = await fetch(API+path,{...opt,headers:{Authorization:'Bearer '+t,'Content-Type':'application/json',...(opt.headers||{})}});
+  if(r.status===401){token=null; return api(path,opt)}
+  const j = await r.json();
+  if(!r.ok) throw new Error(j.error?.message||('Error '+r.status));
+  return j;
+}
+
+/* ---------- Utilidades de fecha ---------- */
+const DIAS=['dom','lun','mar','mié','jue','vie','sáb'];
+function pad(n){return String(n).padStart(2,'0')}
+function hoyTexto(){const d=new Date();return `${DIAS[d.getDay()]} ${pad(d.getDate())}/${pad(d.getMonth()+1)}/${String(d.getFullYear()).slice(2)}`}
+function hoySerial(){const d=new Date();return Math.floor((Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())-Date.UTC(1899,11,30))/86400000)}
+function colLetter(i){let s='';i++;while(i>0){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26)}return s}
+
+/* ---------- Carga ---------- */
+async function loadSheet(i){
+  const sh = SHEETS[i];
+  const range = encodeURIComponent(`'${sh.name}'!A1:AA`);
+  const [f,u] = await Promise.all([
+    api(`/values/${range}?valueRenderOption=FORMATTED_VALUE`),
+    api(`/values/${range}?valueRenderOption=UNFORMATTED_VALUE`)
+  ]);
+  const rows = f.values||[], raw = u.values||[];
+  let h = rows.findIndex((r,ix)=>ix<12 && r.some(c=>/^embalar/i.test(String(c||'').trim())));
+  if(h<0) throw new Error('No encontré la fila de encabezados en '+sh.name);
+  const head = rows[h].map(x=>String(x||'').trim());
+  const ncol = head.length;
+  const find = re => head.findIndex(x=>re.test(x));
+  const cols = {
+    fecha: find(/^fecha( de compra)?$/i),
+    diseno: find(/^dise/i), variante: find(/^variantes?$/i),
+    cliente: find(/^nombre/i), notas: find(/^notas/i),
+    embalar: find(/^embalar/i), despachar: find(/^despachar/i),
+    fenvio: find(/^fecha (de )?env/i), pago: find(/^pag/i)
+  };
+  // columnas checkbox: las que tienen TRUE/FALSE en filas de datos
+  const isBool = head.map((_,c)=>{let n=0,b=0;for(let r=h+1;r<Math.min(raw.length,h+60);r++){const v=raw[r]?.[c];if(v!==undefined&&v!==''){n++;if(typeof v==='boolean')b++}}return n>0&&b/n>.8});
+  // formato de fecha de envío: número o texto
+  let dateMode='text';
+  if(cols.fenvio>=0){for(let r=raw.length-1;r>h;r--){const v=raw[r]?.[cols.fenvio];if(v!==undefined&&v!==''){dateMode=typeof v==='number'?'serial':'text';break}}}
+  const items=[];
+  for(let r=h+1;r<rows.length;r++){
+    const row=rows[r]||[]; const rw=raw[r]||[];
+    const key=[cols.diseno,cols.cliente,cols.variante].map(c=>c>=0?(row[c]||''):'').join('');
+    if(!key.trim()) continue;
+    items.push({row:r+1, v:Array.from({length:ncol},(_,c)=>row[c]??''), raw:Array.from({length:ncol},(_,c)=>rw[c]??'')});
+  }
+  S.data[i]={head,cols,isBool,dateMode,items,h};
+}
+async function load(force){
+  const i=S.tab;
+  if(S.data[i]&&!force){render();return}
+  S.loading=true;render();
+  try{await loadSheet(i)}catch(e){S.err=e.message;toast(e.message,4000)}
+  S.loading=false;render();
+}
+
+/* ---------- Escritura ---------- */
+async function writeCells(i, item, changes){ // changes: {colIndex: value}
+  const D=S.data[i], sh=SHEETS[i];
+  const data=Object.entries(changes).map(([c,val])=>({range:`'${sh.name}'!${colLetter(+c)}${item.row}`,values:[[val]]}));
+  await api('/values:batchUpdate',{method:'POST',body:JSON.stringify({valueInputOption:'USER_ENTERED',data})});
+  for(const [c,val] of Object.entries(changes)){
+    item.raw[c]=val;
+    item.v[c]=(typeof val==='boolean')?(val?'TRUE':'FALSE'):(typeof val==='number'&&+c===D.cols.fenvio?hoyTexto():String(val));
+  }
+}
+async function toggle(ix, rowNum, c){
+  const D=S.data[S.tab]; const item=D.items.find(x=>x.row===rowNum);
+  const nv=!(item.raw[c]===true||item.v[c]==='TRUE');
+  const ch={[c]:nv};
+  const isDesp = c===D.cols.despachar;
+  if(isDesp && nv && D.cols.fenvio>=0 && !String(item.v[D.cols.fenvio]).trim()){
+    ch[D.cols.fenvio] = D.dateMode==='serial'?hoySerial():hoyTexto();
+  }
+  const old={...item.raw}; const oldv=[...item.v];
+  item.raw[c]=nv; item.v[c]=nv?'TRUE':'FALSE';
+  if(ch[D.cols.fenvio]!==undefined){item.raw[D.cols.fenvio]=ch[D.cols.fenvio];item.v[D.cols.fenvio]=hoyTexto()}
+  render();
+  try{await writeCells(S.tab,item,ch);toast(nv?'✓ Guardado':'Guardado')}
+  catch(e){item.raw=old;item.v=oldv;render();toast('No se pudo guardar: '+e.message,4500)}
+}
+
+/* ---------- Render ---------- */
+function matches(item,D){
+  const q=S.q.trim().toLowerCase();
+  if(q && !item.v.join(' ').toLowerCase().includes(q)) return false;
+  const on=c=>c>=0&&(item.raw[c]===true||item.v[c]==='TRUE');
+  if(S.filter==='pend') return !on(D.cols.despachar);
+  if(S.filter==='emb') return !on(D.cols.embalar);
+  return true;
+}
+function tagBtn(item,c,label,key){
+  const on=item.raw[c]===true||item.v[c]==='TRUE';
+  return `<button class="${on?'on':''} ${key?'key':''}" data-t="${item.row}:${c}">${on?'✓ ':''}${esc(label)}</button>`;
+}
+function render(){
+  const app=$('#app');
+  if(!clientId()){return renderSetup()}
+  if(!token){return renderLogin()}
+  const D=S.data[S.tab];
+  let body='';
+  if(S.loading&&!D) body='<div class="msg"><span class="spin" style="border-color:#1f5379;border-top-color:transparent"></span> Cargando…</div>';
+  else if(!D) body=`<div class="msg">${esc(S.err||'Sin datos')}<br><br><button class="chip" onclick="load(true)">Reintentar</button></div>`;
+  else{
+    let items=D.items.filter(it=>matches(it,D)).slice().reverse();
+    const total=items.length; items=items.slice(0,S.limit||60);
+    body = items.map(it=>{
+      const g=c=>c>=0?esc(it.v[c]):'';
+      const flags=D.head.map((hd,c)=>({hd,c})).filter(x=>D.isBool[x.c]&&x.c!==D.cols.pago&&!/^env[ií]o c/i.test(x.hd));
+      const fe=D.cols.fenvio>=0&&it.v[D.cols.fenvio]?`<div class="fecha">📦 Envío: ${esc(it.v[D.cols.fenvio])}</div>`:'';
+      return `<div class="card"><div class="h"><span>${g(D.cols.fecha)}</span><span>fila ${it.row}</span></div>
+        <div class="t">${g(D.cols.diseno)||'(sin diseño)'}</div>
+        <div class="s">${g(D.cols.variante)}</div>
+        <div class="c">${g(D.cols.cliente)} <button class="edit" data-e="${it.row}">Editar ✎</button></div>
+        ${D.cols.notas>=0&&it.v[D.cols.notas]?`<div class="s">📝 ${g(D.cols.notas)}</div>`:''}
+        <div class="tg">${flags.map(x=>tagBtn(it,x.c,x.hd.replace(/\s*\(.*\)/,''),x.c===D.cols.embalar||x.c===D.cols.despachar)).join('')}</div>${fe}</div>`;
+    }).join('');
+    if(!items.length) body='<div class="empty">Nada para mostrar con este filtro.</div>';
+    else if(total>items.length) body+=`<div class="msg"><button class="chip" id="more">Ver más (${total-items.length})</button></div>`;
+  }
+  app.innerHTML=`<header><div class="top"><img src="icon-192.png" alt=""><h1>Jake Pedidos</h1><button id="rf">⟳</button><button id="lo">Salir</button></div>
+    <div class="tabs">${SHEETS.map((s,i)=>`<button class="tab ${i===S.tab?'on':''}" data-tab="${i}">${s.label}</button>`).join('')}</div></header>
+    <div class="bar"><input id="q" type="search" placeholder="Buscar cliente, diseño, notas…" value="${esc(S.q)}">
+    <div class="chips">${[['pend','Sin despachar'],['emb','Sin embalar'],['all','Todos']].map(([k,l])=>`<button class="chip ${S.filter===k?'on':''}" data-f="${k}">${l}</button>`).join('')}</div></div>
+    <div id="list">${body}</div>`;
+  const hh=document.querySelector('header').offsetHeight; document.documentElement.style.setProperty('--hh',hh+'px');
+  const q=$('#q'); if(S.focusQ){q.focus();q.setSelectionRange(q.value.length,q.value.length)}
+}
+function renderSetup(){
+  $('#app').innerHTML=`<div class="login"><img src="icon-512.png"><h2>Configuración inicial</h2>
+  <p>Pegá acá el <b>Client ID</b> de Google (ver guía de instalación).</p>
+  <input id="cid" placeholder="123456-abc.apps.googleusercontent.com"><button id="scid">Guardar</button></div>`;
+}
+function renderLogin(){
+  $('#app').innerHTML=`<div class="login"><img src="icon-512.png"><h2>Pedidos Jake</h2>
+  <button id="go">Ingresar con Google</button><small>Usá la cuenta que tiene acceso a la planilla “Planillas de PEDIDOS”.</small>
+  <small><a href="#" id="chg">Cambiar Client ID</a></small></div>`;
+}
+function openEdit(rowNum){
+  const D=S.data[S.tab], it=D.items.find(x=>x.row===rowNum);
+  const fields=D.head.map((hd,c)=>({hd,c})).filter(x=>x.hd);
+  $('#sp').innerHTML=`<h3 style="margin:0">Fila ${rowNum} · ${esc(it.v[D.cols.cliente]||'')}</h3>`+fields.map(({hd,c})=>{
+    if(D.isBool[c]) return `<div class="f"><div class="sw"><label style="margin:0;font-size:15px;color:#1b2a35">${esc(hd)}</label><input type="checkbox" data-c="${c}" ${(it.raw[c]===true||it.v[c]==='TRUE')?'checked':''}></div></div>`;
+    const long=String(it.v[c]).length>40||/notas|observ|variante/i.test(hd);
+    return `<div class="f"><label>${esc(hd)}</label>${long?`<textarea rows="2" data-c="${c}">${esc(it.v[c])}</textarea>`:`<input type="text" data-c="${c}" value="${esc(it.v[c])}">`}</div>`;
+  }).join('')+`<div class="row"><button class="sec" id="cx">Cancelar</button><button class="pri" id="sv">Guardar</button></div>`;
+  $('#sheet').classList.add('on'); $('#sheet').dataset.row=rowNum;
+}
+async function saveEdit(){
+  const rowNum=+$('#sheet').dataset.row, D=S.data[S.tab], it=D.items.find(x=>x.row===rowNum);
+  const ch={};
+  document.querySelectorAll('#sp [data-c]').forEach(el=>{
+    const c=+el.dataset.c;
+    if(el.type==='checkbox'){const nv=el.checked;const cur=(it.raw[c]===true||it.v[c]==='TRUE');if(nv!==cur)ch[c]=nv}
+    else if(el.value!==String(it.v[c])) ch[c]=el.value;
+  });
+  // autocompletar fecha de envío si se tildó Despachar en el editor
+  if(ch[D.cols.despachar]===true && D.cols.fenvio>=0 && ch[D.cols.fenvio]===undefined && !String(it.v[D.cols.fenvio]).trim())
+    ch[D.cols.fenvio]=D.dateMode==='serial'?hoySerial():hoyTexto();
+  if(!Object.keys(ch).length){$('#sheet').classList.remove('on');return}
+  const b=$('#sv');b.innerHTML='<span class="spin"></span>';
+  try{await writeCells(S.tab,it,ch);$('#sheet').classList.remove('on');toast('✓ Guardado');render()}
+  catch(e){toast('No se pudo guardar: '+e.message,4500);b.textContent='Guardar'}
+}
+
+/* ---------- Eventos ---------- */
+document.addEventListener('click',async e=>{
+  const t=e.target;
+  const tabEl=t.closest('[data-tab]'); if(tabEl){S.tab=+tabEl.dataset.tab;S.limit=60;S.focusQ=false;load();return}
+  const fl=t.closest('[data-f]'); if(fl){S.filter=fl.dataset.f;S.limit=60;S.focusQ=false;render();return}
+  const tg=t.closest('[data-t]'); if(tg){const [r,c]=tg.dataset.t.split(':').map(Number);toggle(0,r,c);return}
+  const ed=t.closest('[data-e]'); if(ed){openEdit(+ed.dataset.e);return}
+  if(t.id==='more'){S.limit=(S.limit||60)+60;render();return}
+  if(t.id==='rf'){delete S.data[S.tab];load(true);return}
+  if(t.id==='lo'){token=null;ls.set('signed','');render();return}
+  if(t.id==='cx'||t.id==='sheet'){$('#sheet').classList.remove('on');return}
+  if(t.id==='sv'){saveEdit();return}
+  if(t.id==='go'){try{await getToken(true);load()}catch(err){toast('Login: '+err.message,4000)}return}
+  if(t.id==='scid'){const v=$('#cid').value.trim();if(v){ls.set('cid',v);tokenClient=null;render()}return}
+  if(t.id==='chg'){e.preventDefault();ls.set('cid','');render();return}
+});
+document.addEventListener('input',e=>{if(e.target.id==='q'){S.q=e.target.value;S.focusQ=true;S.limit=60;clearTimeout(S.dt);S.dt=setTimeout(render,200)}});
+
+window.addEventListener('load',()=>{
+  if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
+  render();
+  if(clientId()&&ls.get('signed')==='1'){
+    let n=0;const iv=setInterval(async()=>{
+      if(window.google&&google.accounts){clearInterval(iv);try{await getToken(false);load()}catch(e){render()}}
+      else if(++n>50)clearInterval(iv);
+    },200);
+  }
+});
+</script>
+</body>
+</html>

@@ -1,6 +1,6 @@
 {
-  "name": "Jake Pedidos",
-  "short_name": "Jake Pedidos",
+  "name": "Jake Central",
+  "short_name": "Jake Central",
   "start_url": "./index.html",
   "scope": "./",
   "display": "standalone",

@@ -117,26 +117,40 @@ function initToken(){
   tokenClient = google.accounts.oauth2.initTokenClient({client_id: clientId(), scope:'https://www.googleapis.com/auth/spreadsheets', callback:()=>{}});
   return true;
 }
-function getToken(interactive){
+/* Sesión persistente: el token (dura ~1 h) se guarda en el dispositivo y se renueva solo en segundo plano */
+(function restoreToken(){
+  try{const o=JSON.parse(ls.get('tok')||'null'); if(o&&o.exp>Date.now()+60000){token=o.t;tokenExp=o.exp}}catch(e){}
+})();
+function saveToken(){ls.set('tok',JSON.stringify({t:token,exp:tokenExp}))}
+function getToken(interactive, force){
   return new Promise((res,rej)=>{
-    if(token && Date.now()<tokenExp-60000) return res(token);
+    if(!force && token && Date.now()<tokenExp-60000) return res(token);
     if(!tokenClient && !initToken()) return rej(new Error('Google todavía no cargó, reintentá.'));
     tokenClient.callback = r=>{
       if(r.error) return rej(new Error(r.error));
-      token=r.access_token; tokenExp=Date.now()+(r.expires_in||3600)*1000; ls.set('signed','1'); res(token);
+      token=r.access_token; tokenExp=Date.now()+(r.expires_in||3600)*1000; ls.set('signed','1'); saveToken(); res(token);
     };
     tokenClient.error_callback = e=>rej(new Error(e.type||'login cancelado'));
-    tokenClient.requestAccessToken({prompt: interactive?'select_account':''});
+    const hint=ls.get('email');
+    tokenClient.requestAccessToken(Object.assign({prompt: ''}, hint?{login_hint:hint}:{}));
   });
 }
-async function api(path, opt={}){
-  const t = await getToken(false).catch(()=>getToken(true));
+function sessionLost(){token=null;tokenExp=0;ls.set('tok','');render()}
+async function api(path, opt={}, retry=true){
+  let t;
+  try{ t = await getToken(false) }catch(e){ sessionLost(); throw new Error('Sesión vencida: tocá "Continuar" para entrar') }
   const r = await fetch(API+path,{...opt,headers:{Authorization:'Bearer '+t,'Content-Type':'application/json',...(opt.headers||{})}});
-  if(r.status===401){token=null; return api(path,opt)}
+  if(r.status===401){ token=null; tokenExp=0; ls.set('tok',''); if(retry) return api(path,opt,false); sessionLost(); throw new Error('Sesión vencida') }
   const j = await r.json();
   if(!r.ok) throw new Error(j.error?.message||('Error '+r.status));
   return j;
 }
+/* renovación silenciosa antes de que venza */
+function keepAlive(){
+  if(!token||!(window.google&&google.accounts)) return;
+  if(tokenExp-Date.now()<10*60000) getToken(false,true).catch(()=>{});
+}
+setInterval(keepAlive,60000);
 
 /* ---------- Fechas ---------- */
 const DIAS=['dom','lun','mar','mié','jue','vie','sáb'];
@@ -362,7 +376,7 @@ function renderSetup(){
 }
 function renderLogin(){
   $('#app').innerHTML=`<div class="login"><img src="icon-512.png"><h2>Jake Central</h2>
-  <button id="go">Ingresar con Google</button><small>Usá la cuenta que tiene acceso a la planilla “Planillas de PEDIDOS”.</small></div>`;
+  <button id="go">${ls.get('signed')==='1'?'Continuar':'Ingresar con Google'}</button><small>Usá la cuenta que tiene acceso a la planilla “Planillas de PEDIDOS”. La sesión queda guardada en este dispositivo.</small></div>`;
 }
 function openEdit(rowNum){
   const D=S.data[S.tab], it=D.items.find(x=>x.row===rowNum);
@@ -402,22 +416,31 @@ document.addEventListener('click',async e=>{
   const ed=t.closest('[data-e]'); if(ed){openEdit(+ed.dataset.e);return}
   const ac=t.closest('[data-act]'); if(ac){ if(ac.dataset.act==='reload') loadAll(); if(ac.dataset.act==='notif') askNotif(); return}
   if(t.id==='more'){S.limit+=60;render();return}
-  if(t.id==='lo'){token=null;ls.set('signed','');render();return}
+  if(t.id==='lo'){token=null;tokenExp=0;ls.set('signed','');ls.set('tok','');render();return}
   if(t.id==='cx'||t.id==='sheet'){$('#sheet').classList.remove('on');return}
   if(t.id==='sv'){saveEdit();return}
   if(t.id==='go'){try{await getToken(true);loadAll()}catch(err){toast('Login: '+err.message,4000)}return}
   if(t.id==='scid'){const v2=$('#cid').value.trim();if(v2){ls.set('cid',v2);tokenClient=null;render()}return}
 });
 document.addEventListener('input',e=>{if(e.target.id==='q'){S.q=e.target.value;S.focusQ=true;S.limit=60;clearTimeout(S.dt);S.dt=setTimeout(render,200)}});
-document.addEventListener('visibilitychange',()=>{if(!document.hidden&&token&&S.loadedAt&&Date.now()-S.loadedAt>5*60000)loadAll()});
+document.addEventListener('visibilitychange',async()=>{
+  if(document.hidden) return;
+  if(token){ keepAlive(); if(S.loadedAt&&Date.now()-S.loadedAt>5*60000) loadAll(); }
+  else if(ls.get('signed')==='1'&&window.google&&google.accounts){ try{await getToken(false,true);loadAll()}catch(e){} }
+});
 
 window.addEventListener('load',()=>{
+  if(!ls.get('email')) ls.set('email','fakundo713@gmail.com');
   if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
-  render();
+  if(token){ loadAll(); }   // sesión guardada: entra directo, sin pedir login
+  else render();
   if(clientId()&&ls.get('signed')==='1'){
     let n=0;const iv=setInterval(async()=>{
-      if(window.google&&google.accounts){clearInterval(iv);try{await getToken(false);loadAll()}catch(e){render()}}
-      else if(++n>50)clearInterval(iv);
+      if(window.google&&google.accounts){
+        clearInterval(iv);
+        if(!token){ try{await getToken(false,true);loadAll()}catch(e){render()} }
+        else keepAlive();
+      } else if(++n>50) clearInterval(iv);
     },200);
   }
 });

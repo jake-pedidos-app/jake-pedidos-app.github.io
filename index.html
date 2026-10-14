@@ -181,6 +181,11 @@ button.alert{font-size:14px;color:var(--ink);font-family:inherit}
 .popbig{display:block;width:100%;text-align:left;background:var(--coral);color:#fff;border:0;border-radius:22px;padding:18px}.popbig b{display:block;font-size:54px;line-height:1;letter-spacing:-.03em}.popbig span{font-size:13px;opacity:.95}
 .popsec{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin:16px 0 8px}
 .pchips{display:flex;flex-wrap:wrap;gap:8px}.pchip{background:var(--peach-l);border-radius:14px;padding:9px 14px;font-size:15px;font-weight:600}.pchip b{color:var(--coral-d);margin-right:2px}
+.kpi.act{outline:2.5px solid var(--ink);outline-offset:-2px}
+#home{padding-bottom:130px}#list{padding-bottom:130px}
+.orow1 small{flex:none;font-size:11px;color:#b5aaa3}
+.ch .r{padding-right:62px}
+#mic{width:52px;height:52px;font-size:21px;opacity:.92}
 </style>
 </head>
 <body>
@@ -482,8 +487,8 @@ async function toggle(si,row,c){
 
 /* ---------- Ajustes (se guardan en este dispositivo) ---------- */
 const SECLBL={install:'Botón de instalar',kpis:'Tarjetas de resumen',alerts:'Avisos (demorados, sin pago, notificaciones)',share:'Botón compartir lista',sheets:'Para embalar por planilla',totals:'Total por tamaño y formato',period:'Selector de período'};
-const KPILBL={emb:'Para embalar',desp:'Embalados, sin despachar',prod:'En producción',late:'Demorados',nopago:'Sin pago',canc:'Cancelados'};
-const CFG_DEF={order:['period','install','kpis','alerts','share','sheets','totals'],hide:{},kpis:{emb:1,desp:1,prod:1,late:0,nopago:0,canc:1},sheets:{0:1,1:1,2:1},start:'home',nodate:1,notif:1,popup:1,defPer:{k:'week'}};
+const KPILBL={hoy:'Despachados hoy',emb:'Para embalar',desp:'Embalados, sin despachar',prod:'En producción',late:'Demorados',nopago:'Sin pago',canc:'Cancelados'};
+const CFG_DEF={order:['period','install','kpis','alerts','share','sheets','totals'],hide:{},kpis:{hoy:1,emb:1,desp:1,prod:1,late:0,nopago:0,canc:1},sheets:{0:1,1:1,2:1},start:'home',nodate:1,notif:1,popup:1,defPer:{k:'week'}};
 function cfgLoad(){
   let c={}; try{ c=JSON.parse(ls.get('cfg')||'{}') }catch(e){}
   if(c.v!==3){ c.order=null; c.v=3 }
@@ -492,7 +497,7 @@ function cfgLoad(){
   d.order.forEach(k=>{ if(!o.includes(k)) o.push(k) });
   return {v:3,order:o,hide:Object.assign(d.hide,c.hide||{}),kpis:Object.assign(d.kpis,c.kpis||{}),sheets:Object.assign(d.sheets,c.sheets||{}),start:c.start||'home',nodate:c.nodate===undefined?1:c.nodate,notif:c.notif===undefined?1:c.notif,popup:c.popup===undefined?1:c.popup,defPer:c.defPer||{k:'week'}};
 }
-let CFG=cfgLoad();
+let CFG=cfgLoad(); S.hf='emb';
 S.per=CFG.defPer;
 function cfgSave(){ ls.set('cfg',JSON.stringify(CFG)) }
 function cfgToggle(k){
@@ -608,6 +613,23 @@ function cardHTML(si,D,it){
     ${tags?`<div class="tg">${tags}</div>`:''}</article>`;
 }
 
+const HTITLE={emb:'Para embalar',desp:'Embalados, sin despachar',prod:'En producción',late:'Demorados',nopago:'Sin pago',canc:'Cancelados',hoy:'Despachados hoy'};
+function homeList(fk){
+  const today=new Date().toDateString();
+  return SHEETS.map((_,si)=>{
+    const D=S.data[si], items=[]; if(!D) return {si,items,tipos:{}};
+    for(const it of D.items){
+      const st=stage(it,D); let okk=false;
+      if(fk==='hoy'){ const fe=D.cols.fenvio>=0?parseFecha(it.v[D.cols.fenvio],it.raw[D.cols.fenvio]):null; okk=st==='enviado'&&!!fe&&fe.toDateString()===today }
+      else { if(!inWindow(it)) continue;
+        okk=fk==='emb'?st==='emb':fk==='desp'?st==='desp':fk==='prod'?st==='prod':fk==='canc'?st==='canc':fk==='late'?isLate(it,st):fk==='nopago'?isNoPago(it,D,st):false }
+      if(okk) items.push(it);
+    }
+    const tipos={}; items.forEach(it=>tipos1(it,D).forEach(k=>tipos[k]=(tipos[k]||0)+1));
+    return {si,items,tipos};
+  });
+}
+function tipos1(it,D){ return tipos(it,D) }
 function renderHome(){
   if(S.loading&&!S.data[0]) return '<div class="skel"></div><div class="skel"></div>';
   if(!S.data[0]) return `<div class="msg">${esc(S.err||'Sin datos')}<br><br><button class="chip" data-act="reload">Reintentar</button></div>`;
@@ -615,29 +637,30 @@ function renderHome(){
   const parts={
     install:()=>{const b=installBtn(); return b?`<div style="margin:0 0 10px">${b}</div>`:''},
     kpis:()=>{
-      const K=[['emb',sum.emb.length,'main'],['desp',sum.desp,''],['prod',sum.prod,''],['late',sum.late,''],['nopago',sum.sinPago,''],['canc',sum.canc,'red']].filter(k=>CFG.kpis[k[0]]);
-      return K.length?`<div class="kpis">${K.map(([k,n,c])=>`<button class="kpi ${c}" data-go="${k}"><span>${KPILBL[k]}</span><b>${n}</b></button>`).join('')}</div>`:'';
+      const hoyN=homeList('hoy').reduce((a,l)=>a+l.items.length,0);
+      const K=[['hoy',hoyN,''],['emb',sum.emb.length,'main'],['desp',sum.desp,''],['prod',sum.prod,''],['late',sum.late,''],['nopago',sum.sinPago,''],['canc',sum.canc,'red']].filter(k=>CFG.kpis[k[0]]);
+      return K.length?`<div class="kpis">${K.map(([k,n,c])=>`<button class="kpi ${c} ${S.hf===k?'act':''}" data-hf="${k}"><span>${KPILBL[k]}</span><b>${n}</b></button>`).join('')}</div>`:'';
     },
     alerts:()=>{
       let h='';
-      if(sum.late) h+=`<button class="alert" style="margin-top:12px;display:block;width:100%;text-align:left" data-go="late">⏰ ${sum.late} pedido(s) llevan más de ${S.late} días sin despachar. <b>Ver</b></button>`;
-      if(sum.sinPago) h+=`<button class="alert" style="margin-top:12px;display:block;width:100%;text-align:left" data-go="nopago">Hay ${sum.sinPago} pedido(s) sin pago confirmado. <b>Ver</b></button>`;
+      if(sum.late) h+=`<button class="alert" style="margin-top:12px;display:block;width:100%;text-align:left" data-hf="late">⏰ ${sum.late} pedido(s) llevan más de ${S.late} días sin despachar. <b>Ver</b></button>`;
+      if(sum.sinPago) h+=`<button class="alert" style="margin-top:12px;display:block;width:100%;text-align:left" data-hf="nopago">Hay ${sum.sinPago} pedido(s) sin pago confirmado. <b>Ver</b></button>`;
       return h;
     },
     share:()=>`<div style="margin:12px 2px 0"><button class="chip" data-act="share">⇪ Compartir lista de embalado</button></div>`,
     sheets:()=>{
-      const list=sum.perSheet.filter(p=>CFG.sheets[p.si]); if(!list.length) return '';
-      return `<div class="sec">Para embalar por planilla</div>`+list.map(p=>{
-        const keys=Object.keys(p.tipos).sort((a,b)=>p.tipos[b]-p.tipos[a]);
-        return `<div class="ch"><div class="r"><b>${SHEETS[p.si].label}</b><span class="n">${p.emb.length}</span></div>`+
-          (keys.length?`<div class="olist">${[...p.emb].sort((a,b)=>{const ta=tipo(a,S.data[p.si]),tb=tipo(b,S.data[p.si]);return ta<tb?-1:ta>tb?1:((a.date?+a.date:0)-(b.date?+b.date:0))}).map(it=>{const D=S.data[p.si];return `<button class="orow1" data-o="${p.si}:${it.row}"><span class="tp">${esc(tipo(it,D))}</span><b>${esc(it.v[D.cols.cliente]||'(sin nombre)')}</b><i>›</i></button>`}).join('')}</div>`:'<div class="note">Nada para embalar</div>')+
-          `<div class="note">Embalados sin despachar: ${p.desp} · En producción: ${p.prod}${p.canc?` · Cancelados: ${p.canc}`:''}</div>`+
-          `<button class="go" data-go-tab="${p.si}">Ver pedidos de ${SHEETS[p.si].short}</button></div>`;
+      const fk=S.hf||'emb', L=homeList(fk).filter(l=>CFG.sheets[l.si]); if(!L.length) return '';
+      return `<div class="sec">${HTITLE[fk]} por planilla</div>`+L.map(l=>{
+        const D=S.data[l.si];
+        return `<div class="ch"><div class="r"><b>${SHEETS[l.si].label}</b><span class="n">${l.items.length}</span></div>`+
+          (l.items.length?`<div class="olist">${[...l.items].sort((a,b)=>{const ta=tipo(a,D),tb=tipo(b,D);return ta<tb?-1:ta>tb?1:((a.date?+a.date:0)-(b.date?+b.date:0))}).map(it=>`<button class="orow1" data-o="${l.si}:${it.row}"><span class="tp">${esc(tipo(it,D))}</span><b>${esc(it.v[D.cols.cliente]||'(sin nombre)')}</b><small>${it.date?it.date.toLocaleDateString('es-AR',{day:'numeric',month:'short'}):'s/f'}</small><i>›</i></button>`).join('')}</div>`:'<div class="note">Nada en esta lista</div>')+
+          `<button class="go" data-go-tab="${l.si}" data-gof="${fk}">Ver pedidos de ${SHEETS[l.si].short}</button></div>`;
       }).join('');
     },
     totals:()=>{
-      const tt=totalTipos(sum); const tk=Object.keys(tt).sort((a,b)=>tt[b]-tt[a]);
-      return tk.length?`<div class="sec">Total para embalar por tamaño y formato</div><div class="ch"><ul style="margin:0">${tk.map(k=>`<li><span>${esc(k)}</span><i>${tt[k]}</i></li>`).join('')}</ul></div>`:'';
+      const fk=S.hf||'emb', tt={}; homeList(fk).forEach(l=>Object.entries(l.tipos).forEach(([k,n])=>tt[k]=(tt[k]||0)+n));
+      const tk=Object.keys(tt).sort((a,b)=>tt[b]-tt[a]);
+      return tk.length?`<div class="sec">Total ${HTITLE[fk].toLowerCase()} por tamaño y formato</div><div class="ch"><ul style="margin:0">${tk.map(k=>`<li><span>${esc(k)}</span><i>${tt[k]}</i></li>`).join('')}</ul></div>`:'';
     },
     period:()=>`${perUI()}
       <div class="note">Para embalar = Imp, Prep Vin y Pegar tildados, sin Embalar ni cancelar.${S.loadedAt?` · Actualizado ${new Date(S.loadedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}`:''}</div>`
@@ -1014,8 +1037,9 @@ document.addEventListener('click',async e=>{
   const t=e.target;
   const v=t.closest('[data-view]'); if(v){S.view=v.dataset.view;S.focusQ=false;render({top:true});return}
   const pg=t.closest('[data-popgo]'); if(pg){ $('#sheet').classList.remove('on'); S.view='sheets';S.tab=ALL;S.filter='emb';S.q='';S.limit=60;S.focusQ=false;render({top:true});return }
+  const hf=t.closest('[data-hf]'); if(hf){ const k=hf.dataset.hf; S.hf=(S.hf===k&&k!=='emb')?'emb':k; render({keep:true}); return }
   const gf=t.closest('[data-go]'); if(gf){S.view='sheets';S.tab=ALL;S.filter=gf.dataset.go;S.q='';S.limit=60;S.focusQ=false;render({top:true});return}
-  const gt=t.closest('[data-go-tab]'); if(gt){S.view='sheets';S.tab=+gt.dataset.goTab;S.filter='emb';S.q='';S.limit=60;S.focusQ=false;render({top:true});return}
+  const gt=t.closest('[data-go-tab]'); if(gt){S.view='sheets';S.tab=+gt.dataset.goTab;S.filter=(gt.dataset.gof&&gt.dataset.gof!=='hoy')?gt.dataset.gof:(gt.dataset.gof==='hoy'?'todos':'emb');S.q='';S.limit=60;S.focusQ=false;render({top:true});return}
   const tabEl=t.closest('[data-tab]'); if(tabEl){S.tab=+tabEl.dataset.tab;S.limit=60;S.focusQ=false;render({keep:true});return}
   const fl=t.closest('[data-f]'); if(fl){S.filter=fl.dataset.f;S.limit=60;S.focusQ=false;render({keep:true});return}
   const pr=t.closest('[data-per]'); if(pr){ const [k,n]=pr.dataset.per.split(':'); setPer(n?{k,n:+n}:{k}); return }
@@ -1084,7 +1108,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v17';
+const APP_V='v18';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

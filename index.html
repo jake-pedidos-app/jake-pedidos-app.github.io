@@ -160,6 +160,13 @@ button.alert{font-size:14px;color:var(--ink);font-family:inherit}
 .ch{border:0;border-radius:22px;box-shadow:0 4px 18px rgba(58,52,49,.07)}
 .chip{border:0;background:#fff;box-shadow:0 1px 4px rgba(58,52,49,.08)}
 .setcard{border:0;box-shadow:0 4px 18px rgba(58,52,49,.06);border-radius:22px}
+.perbox{background:#fff;border-radius:22px;padding:14px;margin-bottom:14px;box-shadow:0 4px 18px rgba(58,52,49,.07)}
+.perhd{display:flex;justify-content:space-between;align-items:center;font-size:13px;color:var(--mut);font-weight:600}.perhd b{color:var(--ink);font-size:15px}
+.perbox .chips{margin-top:10px}.perbox .chip{background:#F6F0EB;box-shadow:none}.perbox .chip.on{background:var(--coral);color:#fff}
+.pernd{display:flex;justify-content:space-between;align-items:center;margin-top:12px;padding-top:10px;border-top:1px dashed var(--line);font-size:13px;color:var(--mut)}
+.cli{margin:12px 0 2px;padding:0;border:0}
+.cli .who{font-size:19px;font-weight:800;letter-spacing:-.01em;color:var(--ink)}
+.card .t{font-size:14px;font-weight:600;color:var(--mut);margin:2px 0 8px}
 </style>
 </head>
 <body>
@@ -235,6 +242,23 @@ const pad=n=>String(n).padStart(2,'0');
 function hoyTexto(){const d=new Date();return `${DIAS[d.getDay()]} ${pad(d.getDate())}/${pad(d.getMonth()+1)}/${String(d.getFullYear()).slice(2)}`}
 function hoySerial(){const d=new Date();return Math.floor((Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())-Date.UTC(1899,11,30))/86400000)}
 function colLetter(i){let s='';i++;while(i>0){const m=(i-1)%26;s=String.fromCharCode(65+m)+s;i=Math.floor((i-1)/26)}return s}
+function serialText(n){const d=new Date(Date.UTC(1899,11,30)+n*86400000);return `${DIAS[d.getUTCDay()]} ${pad(d.getUTCDate())}/${pad(d.getUTCMonth()+1)}/${String(d.getUTCFullYear()).slice(2)}`}
+function dateToSerial(d){return Math.floor((Date.UTC(d.getFullYear(),d.getMonth(),d.getDate())-Date.UTC(1899,11,30))/86400000)}
+function dateText(d){return `${DIAS[d.getDay()]} ${pad(d.getDate())}/${pad(d.getMonth()+1)}/${String(d.getFullYear()).slice(2)}`}
+const MESES=['enero','febrero','marzo','abril','mayo','junio','julio','agosto','septiembre','octubre','noviembre','diciembre'];
+function parseDateWords(str){
+  const t=norm(str).trim(), now=new Date(), d0=new Date(now.getFullYear(),now.getMonth(),now.getDate());
+  if(/\bhoy\b/.test(t)) return d0;
+  if(/\banteayer\b|\banteayer/.test(t)) return new Date(d0.getTime()-2*86400000);
+  if(/\bayer\b/.test(t)) return new Date(d0.getTime()-86400000);
+  if(/\bmanana\b/.test(t)) return new Date(d0.getTime()+86400000);
+  let m=t.match(/(\d{1,2})\s*[\/\-.]\s*(\d{1,2})(?:\s*[\/\-.]\s*(\d{2,4}))?/);
+  if(m){ let y=m[3]?+m[3]:now.getFullYear(); if(y<100)y+=2000; return new Date(y,+m[2]-1,+m[1]) }
+  m=t.match(/(\d{1,2})\s*(?:de\s*)?(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)(?:\s*(?:de\s*)?(\d{2,4}))?/);
+  if(m){ const mi=MESES.indexOf(m[2]==='setiembre'?'septiembre':m[2]); let y=m[3]?+m[3]:now.getFullYear(); if(y<100)y+=2000; return new Date(y,mi,+m[1]) }
+  m=t.match(/hace\s*(\d{1,3})\s*dias?/); if(m) return new Date(d0.getTime()-(+m[1])*86400000);
+  return null;
+}
 function parseFecha(v,raw){
   if(typeof raw==='number') return new Date(Date.UTC(1899,11,30)+raw*86400000);
   const m=String(v||'').match(/(\d{1,2})\/(\d{1,2})\/(\d{2,4})/); if(!m) return null;
@@ -305,10 +329,12 @@ function inWindow(it){ if(!it.date) return !CFG.nodate; const [a,b]=perBounds(),
 function perUI(){
   const p=S.per||{}, on=(k,n)=>p.k===k&&(n===undefined||p.n===n)?'on':'';
   const pre=[['today','Hoy'],['d3','3 días'],['week','Esta semana'],['month','Este mes'],['n:30','30 días'],['n:60','60 días'],['n:90','90 días'],['all','Todo']];
-  const nd=`<div class="cfgrow" style="padding:8px 0 0;border:0"><span>Ignorar pedidos sin fecha</span><button class="sw2 ${CFG.nodate?'on':''}" data-cfg="nodate:1"></button></div>`;
-  return nd+`<div class="chips">${pre.map(([k,l])=>{const [kk,nn]=k.split(':');return `<button class="chip ${on(kk,nn?+nn:undefined)}" data-per="${k}">${l}</button>`}).join('')}</div>
-  <div class="perx"><label>Últimos <input type="number" min="1" id="pn" value="${p.k==='n'?p.n:''}" placeholder="N"> días</label></div>
-  <div class="perx"><label>Desde <input type="date" id="pf" value="${p.k==='custom'?p.from||'':''}"></label><label>hasta <input type="date" id="pt" value="${p.k==='custom'?p.to||'':''}"></label></div>`;
+  const custom=p.k==='custom'||(p.k==='n'&&![30,60,90].includes(p.n));
+  return `<div class="perbox"><div class="perhd"><span>📅 Período</span><b>${perLabel()}</b></div>
+  <div class="chips pc">${pre.map(([k,l])=>{const [kk,nn]=k.split(':');return `<button class="chip ${on(kk,nn?+nn:undefined)}" data-per="${k}">${l}</button>`}).join('')}<button class="chip ${custom||S.perOpen?'on':''}" data-act="perOpen">✎ Personalizar</button></div>
+  ${(S.perOpen||custom)?`<div class="perx"><label>Últimos <input type="number" min="1" id="pn" value="${p.k==='n'?p.n:''}" placeholder="N"> días</label></div>
+  <div class="perx"><label>Desde <input type="date" id="pf" value="${p.k==='custom'?p.from||'':''}"></label><label>hasta <input type="date" id="pt" value="${p.k==='custom'?p.to||'':''}"></label></div>`:''}
+  <div class="pernd"><span>Ignorar pedidos sin fecha</span><button class="sw2 ${CFG.nodate?'on':''}" data-cfg="nodate:1"></button></div></div>`;
 }
 function setPer(o){ S.per=o; ls.set('per',JSON.stringify(o)); render({keep:true}); notifyBadge() }
 function ageTxt(d){ if(!d) return ''; const n=Math.floor((new Date().setHours(0,0,0,0)-new Date(d).setHours(0,0,0,0))/86400000); return n<=0?'hoy':n===1?'ayer':`hace ${n} días` }
@@ -401,8 +427,9 @@ async function setField(si,row,c,nv,fechaOverride){
   const old=[...item.raw], oldv=[...item.v];
   for(const [cc,vv] of Object.entries(ch)){
     const n=+cc; item.raw[n]=vv;
-    item.v[n]=(typeof vv==='boolean')?(vv?'TRUE':'FALSE'):(n===D.cols.fenvio&&typeof vv==='number'?hoyTexto():String(vv));
+    item.v[n]=(typeof vv==='boolean')?(vv?'TRUE':'FALSE'):(typeof vv==='number'&&(n===D.cols.fenvio||n===D.cols.fecha)?serialText(vv):String(vv));
   }
+  if(D.cols.fecha>=0) item.date=parseFecha(item.v[D.cols.fecha],item.raw[D.cols.fecha]);
   render({keep:true});
   try{ await writeCells(si,item,ch); notifyBadge(); }
   catch(e){ item.raw=old; item.v=oldv; render({keep:true}); throw e }
@@ -416,13 +443,14 @@ async function toggle(si,row,c){
 /* ---------- Ajustes (se guardan en este dispositivo) ---------- */
 const SECLBL={install:'Botón de instalar',kpis:'Tarjetas de resumen',alerts:'Avisos (demorados, sin pago, notificaciones)',share:'Botón compartir lista',sheets:'Para embalar por planilla',totals:'Total por tamaño y formato',period:'Selector de período'};
 const KPILBL={emb:'Para embalar',desp:'Embalados, sin despachar',prod:'En producción',late:'Demorados',nopago:'Sin pago',canc:'Cancelados'};
-const CFG_DEF={order:['install','kpis','alerts','share','sheets','totals','period'],hide:{},kpis:{emb:1,desp:1,prod:1,late:0,nopago:0,canc:1},sheets:{0:1,1:1,2:1},start:'home',nodate:1};
+const CFG_DEF={order:['period','install','kpis','alerts','share','sheets','totals'],hide:{},kpis:{emb:1,desp:1,prod:1,late:0,nopago:0,canc:1},sheets:{0:1,1:1,2:1},start:'home',nodate:1};
 function cfgLoad(){
   let c={}; try{ c=JSON.parse(ls.get('cfg')||'{}') }catch(e){}
+  if(c.v!==3){ c.order=null; c.v=3 }
   const d=JSON.parse(JSON.stringify(CFG_DEF));
   const o=Array.isArray(c.order)?c.order.filter(k=>d.order.includes(k)):[];
   d.order.forEach(k=>{ if(!o.includes(k)) o.push(k) });
-  return {order:o,hide:Object.assign(d.hide,c.hide||{}),kpis:Object.assign(d.kpis,c.kpis||{}),sheets:Object.assign(d.sheets,c.sheets||{}),start:c.start||'home',nodate:c.nodate===undefined?1:c.nodate};
+  return {v:3,order:o,hide:Object.assign(d.hide,c.hide||{}),kpis:Object.assign(d.kpis,c.kpis||{}),sheets:Object.assign(d.sheets,c.sheets||{}),start:c.start||'home',nodate:c.nodate===undefined?1:c.nodate};
 }
 let CFG=cfgLoad();
 function cfgSave(){ ls.set('cfg',JSON.stringify(CFG)) }
@@ -515,9 +543,9 @@ function cardHTML(si,D,it){
     ${S.selMode?`<div class="selbox">${sel?'✓':''}</div>`:''}
     ${cancel?'<div class="badge-c">CANCELADO</div>':''}
     <div class="cmeta"><span class="dpill ${cls}">📅 ${dtxt}${it.date?` · ${ageTxt(it.date)}`:''}</span>${fe}<span class="rt"><span class="src">${SHEETS[si].short}</span><small>#${it.row}</small></span></div>
+    <div class="cli"><span class="who">${g(D.cols.cliente)||'(sin nombre)'}</span>${S.selMode?'':`<button class="edit" data-e="${si}:${it.row}">✎ Editar</button>`}</div>
     <div class="t">${g(D.cols.diseno)||'(sin diseño)'}</div>
     <span class="tipo">${esc(t)}</span>
-    <div class="cli"><span>${g(D.cols.cliente)}</span>${S.selMode?'':`<button class="edit" data-e="${si}:${it.row}">Editar</button>`}</div>
     ${D.cols.notas>=0&&it.v[D.cols.notas]?`<div class="note">📝 ${g(D.cols.notas)}</div>`:''}
     ${D.cols.enviar>=0&&it.v[D.cols.enviar]?`<div class="note">🚚 ${g(D.cols.enviar)}</div>`:''}
     ${tags?`<div class="tg">${tags}</div>`:''}</article>`;
@@ -555,7 +583,7 @@ function renderHome(){
       const tt=totalTipos(sum); const tk=Object.keys(tt).sort((a,b)=>tt[b]-tt[a]);
       return tk.length?`<div class="sec">Total para embalar por tamaño y formato</div><div class="ch"><ul style="margin:0">${tk.map(k=>`<li><span>${esc(k)}</span><i>${tt[k]}</i></li>`).join('')}</ul></div>`:'';
     },
-    period:()=>`<div class="sec">Período: ${perLabel()}</div>${perUI()}
+    period:()=>`${perUI()}
       <div class="note">Para embalar = Imp, Prep Vin y Pegar tildados, sin Embalar ni cancelar.${S.loadedAt?` · Actualizado ${new Date(S.loadedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}`:''}</div>`
   };
   return `<div class="hello">Hoy<b>Pedidos Jake</b></div>`+CFG.order.filter(k=>!CFG.hide[k]).map(k=>parts[k]?parts[k]():'').join('');
@@ -572,7 +600,7 @@ function renderConfig(){
   <div class="setcard">${SHEETS.map((s,i)=>`<div class="cfgrow"><span>${s.label}</span>${sw(CFG.sheets[i],`data-cfg="sheet:${i}"`)}</div>`).join('')}</div>
   <div class="sec">Reglas</div>
   <div class="setcard">
-    <div class="cfgrow" style="display:block"><span>Período de pedidos que cuentan: <b>${perLabel()}</b></span>${perUI()}</div>
+    <div class="cfgrow" style="display:block">${perUI()}</div>
     <div class="cfgrow" style="display:block"><span>Un pedido está demorado después de</span><div class="chips">${[3,5,7,10,14].map(d=>`<button class="chip ${S.late===d?'on':''}" data-late="${d}">${d} días</button>`).join('')}</div></div>
     <div class="cfgrow"><span>Agrupar por tamaño en "Para embalar"</span>${sw(S.group,'data-cfg="group:1"')}</div>
     <div class="cfgrow" style="display:block"><span>Abrir la app en</span><div class="chips"><button class="chip ${CFG.start==='home'?'on':''}" data-cfg="start:home">Inicio</button><button class="chip ${CFG.start==='sheets'?'on':''}" data-cfg="start:sheets">Pedidos</button></div></div>
@@ -744,19 +772,22 @@ const FILLER=new Set(['ya','el','la','los','las','un','una','pedido','pedidos','
 function parseVoice(text){
   const t=norm(text);
   const keys=ACTIONS.filter(a=>a.re.test(t)).map(a=>a.key);
-  if(!keys.length) return {err:'No entendí qué marcar. Decí, por ejemplo: "embalé el pedido de María".'};
+  if(!keys.length) return {err:'No entendí qué hacer. Probá: "embalé el pedido de María", "cambiá la fecha de Juan a ayer" o "poné nota de Ana: llamar".'};
   const val=!/\b(no|desmarc|saca|quita|destild|sacar|quitar)\b/.test(t);
+  const r=locate(t,keys,null,false); if(r.it) {r.keys=keys;r.val=val} return r;
+}
+function locate(t,keys,personText,allowCancel){
   let si=null;
   if(/mercado|\bml\b/.test(t)) si=0; else if(/tienda|nube|\btn\b/.test(t)) si=1; else if(/wsp|whats|reclamo/.test(t)) si=2;
   const fm=t.match(/(?:fila|numero|nro)\s*(\d{1,6})/);
   const rowNum=fm?+fm[1]:null;
-  const words=t.replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(w=>w.length>=2 && !FILLER.has(w) && !/^\d+$/.test(w));
+  const words=norm(personText||t).replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(w=>w.length>=2 && !FILLER.has(w) && !/^\d+$/.test(w));
   if(!words.length && rowNum==null) return {err:'¿De qué pedido? Decí el nombre, el diseño o el número de fila.'};
   const cands=[];
   SHEETS.forEach((s,i)=>{
     if(si!==null&&si!==i) return; const D=S.data[i]; if(!D) return;
     for(const it of D.items){
-      if(isCancel(it)||!inWindow(it)) continue;
+      if((!allowCancel&&isCancel(it))||(!allowCancel&&!inWindow(it))) continue;
       if(rowNum!=null && it.row!==rowNum) continue;
       const hay=norm(it.v.join(' '));
       const score=words.filter(w=>hay.includes(w)).length;
@@ -772,9 +803,43 @@ function parseVoice(text){
   if(words.length && top.score<Math.ceil(words.length/2)) return {noMatch:true,q:words.join(' ')};
   const tie=cands.filter(c=>c.score===top.score && c.rel===top.rel);
   if(tie.length>1) return {ambig:true,cands:tie.slice(0,6)};
-  return {si:top.si,row:top.row,keys,val,it:top.it,D:top.D};
+  return {si:top.si,row:top.row,it:top.it,D:top.D};
+}
+const FIELD_KEYS=[
+  [/fechaenvio/, 'fenvio','Fecha de envío'],[/fecha/, 'fecha','Fecha del pedido'],[/nota|observ|coment/, 'notas','Notas'],
+  [/direccion|enviar|envio/, 'enviar','Enviar'],[/diseno/, 'diseno','Diseño'],[/variante|tamano|formato|talle|set/, 'variante','Variantes'],
+  [/cliente|nombre|persona/, 'cliente','Nombre'],[/pago/, 'pago','Pago']];
+function parseEdit(text){
+  text=text.normalize('NFD').replace(/[\u0300-\u036f]/g,'').replace(/fecha\s+(?:de\s+|del\s+)?envio/ig,'fechaenvio');
+  const m=text.match(/\b(?:cambi\w*|pon\w*|modific\w*|actualiz\w*|edit\w*|anot\w*|agreg\w*|escrib\w*|carg\w*|correg\w*)\s+(?:la |el |los |las |una |un )?(.+?)\s+(?:del? pedido (?:de |del |de la )?|de la |del |de |para )(.+?)\s*(?::|\ba\b|\bpor\b|\bcomo\b|\bcon\b|\ben\b)\s*(.+)$/i);
+  if(!m) return null;
+  const fieldT=norm(m[1]); const fk=FIELD_KEYS.find(f=>f[0].test(fieldT)); if(!fk) return null;
+  return {fk,person:m[2],value:m[3].trim()};
+}
+async function runEdit(text,e){
+  const t=norm(text);
+  const r=locate(t,[],e.person,true);
+  if(r.err) return renderVoice(`Escuché: “${text}”. ${r.err}`);
+  if(r.noMatch) return renderVoice(`Escuché: “${text}”. No encontré ningún pedido que coincida con “${e.person}”.`);
+  if(r.ambig) return renderVoice(`Escuché: “${text}”. Hay varios pedidos con ese nombre. Decí el número de fila: `+r.cands.map(c=>`${SHEETS[c.si].short} fila ${c.row}: ${c.it.v[c.D.cols.cliente]} · ${c.it.v[c.D.cols.diseno]}`).join(' | '));
+  const {si,row,D,it}=r, col=D.cols[e.fk[1]];
+  if(col==null||col<0) return renderVoice(`Esa planilla no tiene la columna ${e.fk[2]}.`);
+  let nv=e.value, shown=e.value;
+  if(e.fk[1]==='fecha'||e.fk[1]==='fenvio'){
+    const d=parseDateWords(e.value); if(!d) return renderVoice(`No entendí la fecha “${e.value}”. Decí por ejemplo “hoy”, “ayer” o “15 de octubre”.`);
+    const asSerial=typeof it.raw[col]==='number'||(e.fk[1]==='fenvio'&&D.dateMode==='serial');
+    nv=asSerial?dateToSerial(d):dateText(d); shown=dateText(d);
+  }
+  const oldRaw=it.raw[col];
+  try{ await setField(si,row,col,nv,e.fk[1]==='fenvio'?undefined:undefined) }
+  catch(er){ return renderVoice('No se pudo guardar: '+er.message) }
+  $('#voice').classList.remove('on');
+  toastAct(`✓ ${e.fk[2]}: ${shown} · ${it.v[D.cols.cliente]} (${SHEETS[si].short} #${row})`,'Deshacer',async()=>{
+    try{ await setField(si,row,col,oldRaw); toast('Deshecho') }catch(er){ toast('No se pudo deshacer: '+er.message,4000) }
+  });
 }
 async function runCommand(text){
+  const ed=parseEdit(text); if(ed) return runEdit(text,ed);
   const r=parseVoice(text);
   if(r.err) return renderVoice(`Escuché: “${text}”. ${r.err}`);
   if(r.noMatch) return renderVoice(`Escuché: “${text}”. No encontré ningún pedido que coincida con “${r.q}”.`);
@@ -797,7 +862,7 @@ function renderVoice(msg, listening){
   $('#vp').innerHTML=`<h3 style="margin:0 0 6px">Asistente de voz</h3><div class="note" style="font-size:14px;color:var(--ink)">${esc(msg)}</div>
     <div class="row" style="margin-top:14px"><button class="pri" id="vhab">${listening?'Escuchando…':'🎤 Hablar'}</button><button class="sec2" id="vcl">Cerrar</button></div>
     <div class="f"><input id="vtxt" type="text" placeholder="ej: ya embalé el de María"></div>
-    <div class="note">Ejemplos: "embalé el pedido de María", "despachado Juan Pérez", "pegado y embalado Lucía fila 120", "sacá el embalado de Lucía".</div>`;
+    <div class="note">Ejemplos: "embalé el pedido de María", "despachado Juan Pérez", "pegado y embalado Lucía fila 120", "sacá el embalado de Lucía", "cambiá la fecha de María a ayer", "poné nota de Ana: llamar antes", "cambiá la fecha de envío de Juan a hoy".</div>`;
   $('#voice').classList.add('on');
 }
 async function ensureMic(){
@@ -883,6 +948,7 @@ document.addEventListener('click',async e=>{
   const ac=t.closest('[data-act]'); if(ac){ if(ac.dataset.act==='reload') loadAll(); if(ac.dataset.act==='notif') askNotif();
     if(ac.dataset.act==='share') shareList();
     if(ac.dataset.act==='install') doInstall();
+    if(ac.dataset.act==='perOpen'){ S.perOpen=!S.perOpen; render({keep:true}) }
     if(ac.dataset.act==='tour') tourStart();
     if(ac.dataset.act==='logout'){token=null;tokenExp=0;ls.set('signed','');ls.set('tok','');render()}
     if(ac.dataset.act==='cfgreset'){CFG=JSON.parse(JSON.stringify(CFG_DEF));cfgSave();render({keep:true});toast('Ajustes restablecidos')}

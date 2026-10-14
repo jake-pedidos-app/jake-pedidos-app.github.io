@@ -203,6 +203,13 @@ button.fl{padding:7px 11px;font-size:12.5px}
 .tg button.off{background:#FDE0DB;color:var(--coral-d)}
 .setbox.full{background:var(--peach-l)}
 .orow1,.card,.setbox{position:relative}
+.srow{display:flex;align-items:center;justify-content:space-between;gap:10px;background:#fff;border-radius:18px;padding:12px 14px;margin-bottom:8px;box-shadow:0 3px 14px rgba(58,52,49,.06);position:relative;touch-action:pan-y}
+.srow.zero{opacity:.72}
+.sinfo{min-width:0;flex:1}.sinfo b{display:block;font-size:15px;line-height:1.25}.sinfo span{display:block;font-size:12px;color:var(--mut);margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.sinfo em{display:block;font-style:normal;font-size:12px;font-weight:700;color:var(--bad);margin-top:3px}
+.sctl{display:flex;align-items:center;gap:6px;flex:none}
+.sbtn{width:36px;height:36px;border-radius:12px;border:0;background:var(--peach-l);color:var(--coral-d);font-size:20px;font-weight:800}
+.snum{min-width:46px;height:36px;border-radius:12px;border:0;background:#F6F0EB;font-size:17px;font-weight:800;color:var(--ink)}
+.qinput{width:100%;box-sizing:border-box;font-size:28px;font-weight:800;text-align:center;border:2px solid var(--peach);border-radius:16px;padding:12px;font-family:inherit}
 </style>
 </head>
 <body>
@@ -222,6 +229,7 @@ const SHEETS = [
 ];
 const ALL=-1;
 const FLAGS=[{key:'imp',label:'Imprimir'},{key:'prep',label:'Preparar'},{key:'pegar',label:'Pegar'},{key:'embalar',label:'Embalar'},{key:'despachar',label:'Despachar'}];
+const STOCK_ID='100lFEPb4O0FnsWiQVOuXNh0hLwjNolYWOk26Z1_W_8I', STOCK_API='https://sheets.googleapis.com/v4/spreadsheets/'+STOCK_ID;
 const API = 'https://sheets.googleapis.com/v4/spreadsheets/' + SPREADSHEET_ID;
 const $ = s => document.querySelector(s);
 const esc = s => String(s ?? '').replace(/[&<>"]/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
@@ -264,7 +272,8 @@ function sessionLost(){token=null;tokenExp=0;ls.set('tok','');render()}
 async function api(path, opt={}, retry=true){
   let t;
   try{ t = await getToken(false) }catch(e){ sessionLost(); throw new Error('Sesión vencida: tocá "Continuar"') }
-  const r = await fetch(API+path,{...opt,headers:{Authorization:'Bearer '+t,'Content-Type':'application/json',...(opt.headers||{})}});
+  const base=opt.base||API; delete opt.base;
+  const r = await fetch(base+path,{...opt,headers:{Authorization:'Bearer '+t,'Content-Type':'application/json',...(opt.headers||{})}});
   if(r.status===401){ token=null; tokenExp=0; ls.set('tok',''); if(retry) return api(path,opt,false); sessionLost(); throw new Error('Sesión vencida') }
   const j = await r.json();
   if(!r.ok) throw new Error(j.error?.message||('Error '+r.status));
@@ -504,6 +513,140 @@ async function toggle(si,row,c){
   catch(e){ toast('No se pudo guardar: '+e.message,4500) }
 }
 
+
+/* ================= MÓDULO PRODUCCIÓN: STOCK ================= */
+S.mod=ls.get('mod')||'central';
+S.stock={items:[],loaded:false,loading:false,err:null,title:'Hoja 1',q:'',cat:'Todas'};
+const MODS={central:'Jake Central',prod:'Jake Producción'};
+const modName=k=>ls.get('modn_'+k)||MODS[k];
+const stkNote=n=>(!isNaN(+n)&&String(n).trim()!=='')?+n:0;
+async function loadStock(){
+  S.stock.loading=true; render({keep:true});
+  try{
+    const meta=await api('?fields=sheets.properties.title',{base:STOCK_API});
+    S.stock.title=meta.sheets[0].properties.title;
+    const r=await api('/values/'+encodeURIComponent("'"+S.stock.title+"'!A1:H600")+'?valueRenderOption=UNFORMATTED_VALUE',{base:STOCK_API});
+    const rows=r.values||[];
+    S.stock.items=rows.slice(1).map((v,i)=>({row:i+2,code:String(v[0]||''),cat:String(v[1]||''),prod:String(v[2]||''),sub:String(v[3]||''),stock:stkNote(v[4]),pp:(v[5]===undefined||v[5]==='')?null:+v[5],aviso:String(v[6]||'NO').toUpperCase()==='SI',upd:String(v[7]||'')})).filter(x=>x.code);
+    S.stock.loaded=true; S.stock.err=null;
+  }catch(e){ S.stock.err=e.message; toast(e.message,4500) }
+  S.stock.loading=false; render({keep:true}); stockNotify();
+}
+function stkLow(it){ return it.pp!==null&&!isNaN(it.pp)&&it.stock<=it.pp }
+async function stockWrite(it,ch){
+  const t=S.stock.title, d=[];
+  const colOf={stock:'E',pp:'F',aviso:'G'};
+  const old={stock:it.stock,pp:it.pp,aviso:it.aviso,upd:it.upd};
+  Object.assign(it,ch); it.upd=hoyTexto();
+  render({keep:true});
+  try{
+    for(const k of Object.keys(ch)){ d.push({range:`'${t}'!${colOf[k]}${it.row}`,values:[[k==='aviso'?(it.aviso?'SI':'NO'):(it[k]===null?'':it[k])]]}) }
+    d.push({range:`'${t}'!H${it.row}`,values:[[it.upd]]});
+    await api('/values:batchUpdate',{method:'POST',base:STOCK_API,body:JSON.stringify({valueInputOption:'USER_ENTERED',data:d})});
+  }catch(e){ Object.assign(it,old); render({keep:true}); throw e }
+}
+async function stockAdjust(it,mode,n){
+  const nv=mode==='set'?n:mode==='add'?it.stock+n:Math.max(0,it.stock-n);
+  const prev=it.stock;
+  await stockWrite(it,{stock:nv});
+  toastAct(`${it.prod}: ${prev} → ${nv}`,'Deshacer',async()=>{ try{ await stockWrite(it,{stock:prev}); toast('Deshecho') }catch(e){ toast(e.message,4000) } });
+  stockNotify(true);
+}
+async function stockNotify(force){
+  try{
+    if(!CFG.notif||!window.Notification||Notification.permission!=='granted') return;
+    const td=new Date().toDateString(); if(ls.get('stkNotifDay')===td&&!force) return;
+    const low=S.stock.items.filter(x=>x.aviso&&stkLow(x)); if(!low.length) return;
+    const reg=await navigator.serviceWorker.ready;
+    reg.showNotification(`Punto de pedido: ${low.length} producto(s) para reponer`,{body:low.slice(0,4).map(x=>x.prod+' ('+x.stock+')').join(' · '),icon:'jk-192.png',badge:'jk-192.png'});
+    ls.set('stkNotifDay',td);
+  }catch(e){}
+}
+const STKCATS=()=>['Todas',...[...new Set(S.stock.items.map(x=>x.cat))]];
+function stkSorted(){
+  const q=norm(S.stock.q.trim()), c=S.stock.cat;
+  return S.stock.items.filter(x=>(c==='Todas'||x.cat===c)&&(!q||norm([x.code,x.prod,x.sub,x.cat].join(' ')).includes(q)))
+    .sort((a,b)=>((b.stock>0)-(a.stock>0))||a.cat.localeCompare(b.cat)||a.code.localeCompare(b.code));
+}
+function stkRow(x){
+  return `<div class="srow ${x.stock>0?'':'zero'}" data-sw="stk:${x.row}"><div class="sinfo" data-sk="${x.row}"><b>${esc(x.prod)}</b><span>${esc(x.code)}${x.sub&&x.sub!==x.cat?' · '+esc(x.sub):''}</span>${stkLow(x)?`<em>⚠ Reponer (punto: ${x.pp})</em>`:''}</div>
+    <div class="sctl"><button class="sbtn" data-sadj="${x.row}:-1">−</button><button class="snum" data-sset="${x.row}">${x.stock}</button><button class="sbtn" data-sadj="${x.row}:1">+</button></div></div>`;
+}
+function renderStock(){
+  if(S.stock.loading&&!S.stock.loaded) return '<div id="home"><div class="skel"></div><div class="skel"></div></div>';
+  if(!S.stock.loaded) return `<div id="home"><div class="msg">${esc(S.stock.err||'Sin datos de stock')}<br><br><button class="chip" data-act="reload">Reintentar</button></div></div>`;
+  const list=stkSorted(), withS=list.filter(x=>x.stock>0).length;
+  return `<div class="bar" style="padding-top:12px"><input id="sq" type="search" placeholder="🔍 Buscar producto, código o categoría…" value="${esc(S.stock.q)}" autocomplete="off">
+    <div class="chips" id="schips">${STKCATS().map(c=>`<button class="chip ${S.stock.cat===c?'on':''}" data-scat="${esc(c)}">${esc(c)}</button>`).join('')}</div></div>
+    <div id="list"><div class="note" style="margin:0 2px 8px">${list.length} productos · ${withS} con stock · deslizá → sumar, ← restar o eliminar</div>
+    ${list.map(stkRow).join('')||'<div class="empty">Nada para mostrar.</div>'}</div>`;
+}
+function renderPStart(){
+  if(S.stock.loading&&!S.stock.loaded) return '<div class="skel"></div><div class="skel"></div>';
+  if(!S.stock.loaded) return `<div class="msg">${esc(S.stock.err||'Sin datos')}<br><br><button class="chip" data-act="reload">Reintentar</button></div>`;
+  const it=S.stock.items, tot=it.reduce((a,x)=>a+x.stock,0), low=it.filter(stkLow);
+  const byCat={}; it.forEach(x=>{byCat[x.cat]=(byCat[x.cat]||0)+x.stock});
+  return `<div class="hello">Producción<b>Stock e inventario</b></div>
+  <div class="kpis"><div class="kpi main"><span>Unidades en stock</span><b>${tot}</b></div><div class="kpi"><span>Productos con stock</span><b>${it.filter(x=>x.stock>0).length}</b></div></div>
+  ${low.length?`<div class="sec">⚠ Para reponer (punto de pedido)</div><div class="ch"><div class="olist">${low.map(x=>`<button class="orow1" data-sk="${x.row}"><span class="nm"><b>${esc(x.prod)}</b><em>${esc(x.code)} · punto de pedido ${x.pp}</em></span><span class="tp">${x.stock}</span><i>›</i></button>`).join('')}</div></div>`:'<div class="alert" style="margin-top:12px">✓ Nada por debajo del punto de pedido.</div>'}
+  <div class="sec">Stock por categoría</div><div class="ch"><ul style="margin:0">${Object.entries(byCat).map(([k,v])=>`<li><span>${esc(k)}</span><i>${v}</i></li>`).join('')}</ul></div>`;
+}
+function openQty(row,mode){
+  const it=S.stock.items.find(x=>x.row===row); if(!it) return;
+  S.q2={row,mode};
+  $('#sw2p').innerHTML=`<div class="ohead"><div><div class="ow">${esc(it.prod)}</div><div class="od">${esc(it.code)} · stock actual: <b>${it.stock}</b></div></div></div>
+  <div class="swhd ${mode==='sub'?'unmark':'mark'}">${mode==='add'?'➕ Sumar':mode==='sub'?'➖ Restar':'✏️ Cantidad exacta'}</div>
+  <input id="qn" class="qinput" type="number" inputmode="numeric" min="0" value="${mode==='set'?it.stock:1}">
+  ${mode==='set'?'':`<div class="pchips" style="margin-top:10px">${[1,5,10,20,50].map(n=>`<button class="pchip" data-qchip="${n}">+${n}</button>`).join('')}</div>`}
+  <div class="row"><button class="sec2" id="sw2x">Cancelar</button><button class="pri" id="qok">Confirmar</button></div>`;
+  $('#sw2').classList.add('on'); setTimeout(()=>{const q=$('#qn'); if(q){q.focus();q.select()}},120);
+}
+function stockSwipe(row,mode){
+  const it=S.stock.items.find(x=>x.row===row); if(!it) return;
+  if(mode==='add') return openQty(row,'add');
+  $('#sw2p').innerHTML=`<div class="ohead"><div><div class="ow">${esc(it.prod)}</div><div class="od">Stock actual: <b>${it.stock}</b></div></div></div>
+  <div class="swhd unmark">⬅ ¿Qué querés hacer?</div>
+  <div class="tg"><button class="off" data-qmode="${row}:sub">➖ Restar cantidad</button><button class="off" data-qdel="${row}">🗑 Eliminar stock</button></div>
+  <div class="row"><button class="pri" id="sw2x">Cancelar</button></div>`;
+  $('#sw2').classList.add('on');
+}
+function openItem(row){
+  const it=S.stock.items.find(x=>x.row===row); if(!it) return;
+  $('#sp').innerHTML=`<div class="ohead"><div><div class="ow">${esc(it.prod)}</div><div class="od">${esc(it.code)} · ${esc(it.cat)}</div></div></div>
+  <div class="f"><label>Stock</label><input type="number" id="it_stock" value="${it.stock}" min="0"></div>
+  <div class="f"><label>Punto de pedido (avisar cuando el stock llegue a este número o menos)</label><input type="number" id="it_pp" value="${it.pp===null?'':it.pp}" min="0" placeholder="sin punto de pedido"></div>
+  <div class="cfgrow"><span>Notificación del teléfono<br><small style="color:var(--mut)">Apagada: solo aparece el aviso en el Inicio</small></span><button class="sw2 ${it.aviso?'on':''}" id="it_av" data-onoff="1"></button></div>
+  ${it.upd?`<div class="note">Última actualización: ${esc(it.upd)}</div>`:''}
+  <div class="row"><button class="sec2" id="cx">Cerrar</button><button class="pri" id="it_save" data-row="${row}">Guardar</button></div>`;
+  $('#sheet').classList.add('on'); $('#sheet').dataset.mode='item';
+}
+async function saveItem(row){
+  const it=S.stock.items.find(x=>x.row===row);
+  const st=Math.max(0,+$('#it_stock').value||0), ppv=$('#it_pp').value; const av=$('#it_av').classList.contains('on');
+  try{ await stockWrite(it,{stock:st,pp:ppv===''?null:+ppv,aviso:av}); $('#sheet').classList.remove('on'); toast('✓ Guardado'); stockNotify(true) }catch(e){ toast(e.message,4500) }
+}
+const NUMW={un:1,una:1,uno:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10,doce:12,quince:15,veinte:20,treinta:30,cuarenta:40,cincuenta:50};
+async function runStockCommand(text){
+  const t=norm(text);
+  let n=null; const dm=t.match(/\b(\d{1,5})\b/); if(dm) n=+dm[1]; else { for(const w of t.split(/\s+/)) if(NUMW[w]!==undefined){ n=NUMW[w]; break } }
+  if(n===null) return renderVoice(`Escuché: “${text}”. ¿Qué cantidad? Ej: "conté 45 cuadros M de Kiri".`);
+  const mode=/\b(resta|restar|saque|saca|sacar|vendi|descont|egres|gaste|usamos|use)\w*/.test(t)?'sub':/\b(suma|sumar|sume|agrega|agregue|agregar|ingres|entraron|llegaron|compre|recibi|sumale)\w*/.test(t)?'add':'set';
+  const items=S.stock.items; let cands=[];
+  if(/cuadro/.test(t)){
+    const sz=(t.match(/\b(xl|l|m|s)\b/)||[])[1], fm=/kiri/.test(t)?'KIRI':/mdf|vinilo/.test(t)?'MDF':/canvas|tela/.test(t)?'CANVAS':null;
+    cands=items.filter(x=>x.cat==='Cuadros'&&(!sz||x.code.includes('-'+sz.toUpperCase()+'-'))&&(!fm||x.code.endsWith('-'+fm)));
+  } else {
+    const FILL=new Set(['conte','conta','hay','tengo','quedan','de','del','la','el','los','las','un','una','en','stock','suma','sumar','agrega','agregue','resta','restar','saque','vendi','unidades','unidad','y','con','mas','menos','ya','son','tenemos','ukelele','ukeleles','uke','alfombra','alfombras','pad','pads','individual','individuales','posavasos']);
+    const words=t.replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(w=>w.length>=2&&!FILL.has(w)&&!/^\d+$/.test(w)&&NUMW[w]===undefined);
+    const cat=/ukele|uke/.test(t)?'Ukeleles':/alfombra/.test(t)?'Alfombras':/posavaso/.test(t)?'Posavasos':/individual/.test(t)?'Individuales':/\bpads?\b/.test(t)?'Pads':null;
+    let sc=items.filter(x=>!cat||x.cat===cat).map(x=>({x,s:words.filter(w=>norm([x.prod,x.sub,x.code].join(' ')).includes(w)).length})).filter(o=>o.s>0&&words.length);
+    const best=Math.max(0,...sc.map(o=>o.s)); cands=sc.filter(o=>o.s===best).map(o=>o.x);
+  }
+  if(!cands.length) return renderVoice(`Escuché: “${text}”. No encontré ese producto.`);
+  if(cands.length>1) return renderVoice(`Escuché: “${text}”. Hay varios: `+cands.slice(0,6).map(x=>`${x.prod} (${x.code})`).join(' | ')+'. Decilo más específico.');
+  try{ await stockAdjust(cands[0],mode,n); $('#voice').classList.remove('on') }catch(e){ renderVoice('No se pudo guardar: '+e.message) }
+}
+
 /* ---------- Ajustes (se guardan en este dispositivo) ---------- */
 const SECLBL={install:'Botón de instalar',kpis:'Tarjetas de resumen',alerts:'Avisos (demorados, sin pago, notificaciones)',share:'Botón compartir lista',sheets:'Para embalar por planilla',totals:'Total por tamaño y formato',period:'Selector de período'};
 const KPILBL={hoy:'Despachados hoy',emb:'Para embalar',desp:'Embalados, sin despachar',prod:'En producción',late:'Demorados',nopago:'Sin pago',canc:'Cancelados'};
@@ -571,6 +714,20 @@ const TOURS={
   {sel:'[data-act=reload]',t:'Cuenta y datos',x:'Actualizá los datos a mano, reiniciá los ajustes del inicio o cerrá sesión.'}
  ]
 };
+TOURS.pstart=[
+  {sel:'.brand',t:'Jake Producción',x:'Esta sección maneja el stock. Con ⇄ cambiás entre Jake Central (pedidos) y Producción.'},
+  {sel:'.kpis',t:'Resumen de stock',x:'Total de unidades y cuántos productos tienen stock.'},
+  {sel:'.sec',t:'Punto de pedido',x:'Acá aparecen los productos que llegaron a su punto de pedido y hay que reponer.'},
+  {sel:'#mic',t:'Voz',x:'Decí, por ejemplo: “conté 45 cuadros M de Kiri” y se anota el stock.'}
+];
+TOURS.stock=[
+  {sel:'#sq',t:'Buscador',x:'Buscá por nombre, código o categoría.'},
+  {sel:'#schips',t:'Categorías',x:'Filtrá por Ukeleles, Cuadros, Alfombras, Pads, Posavasos o Individuales.'},
+  {sel:'.srow',t:'Un producto',x:'Primero van los que tienen stock. Tocá − o + para restar/sumar 1, o tocá el número para escribir la cantidad exacta.'},
+  {sel:'.sinfo',t:'Detalle y punto de pedido',x:'Tocá el nombre para definir el punto de pedido y activar o apagar la notificación del teléfono.'},
+  {sel:'.srow',t:'Deslizar',x:'→ derecha: sumar (elegís cuántos). ← izquierda: restar o eliminar todo el stock (pide confirmación).'},
+  {sel:'#mic',t:'Voz',x:'“Sumá 10 pads de Beatles”, “conté 45 cuadros M de Kiri”, “saqué 3 alfombras Zoo”.'}
+];
 let TL=[],tourI=-1;
 function tourStop(){ tourI=-1; const t=document.getElementById('tour'); if(t) t.remove(); ls.set('toured','1') }
 function tourShow(i){
@@ -812,16 +969,18 @@ function render(opt={}){
   const scrolls=[...document.querySelectorAll('.chips,.tabs')].map(el=>el.scrollLeft);
   if(!clientId()) return renderSetup();
   if(!token) return renderLogin();
+  const prod=S.mod==='prod'; if(prod&&!['pstart','stock','config'].includes(S.view)) S.view='pstart'; if(!prod&&['pstart','stock'].includes(S.view)) S.view='home';
   const home=S.view==='home';
   if(S.view!=='sheets') S.selMode=false;
   $('#app').innerHTML=`<header><div class="top">
-      <button class="brand" data-view="home" aria-label="Inicio"><img src="jk-192.png" alt="Jake"><b>Jake Central</b></button>
+      <button class="brand" data-view="${prod?'pstart':'home'}" aria-label="Inicio"><img src="jk-192.png" alt="Jake"><b>${esc(modName(S.mod))}</b></button>
+      <button class="ibtn" data-act="modsw" title="Cambiar de sección" aria-label="Cambiar de sección" style="margin-left:6px">⇄</button>
       <button class="ibtn wand" data-act="tour" title="Guía paso a paso" aria-label="Guía paso a paso" style="margin-left:auto">🪄</button>
       </div>
     </header>
-    ${home?`<div id="home">${renderHome()}</div>`:S.view==='config'?`<div id="home">${renderConfig()}</div>`:renderSheets()}
+    ${S.view==='pstart'?`<div id="home">${renderPStart()}</div>`:S.view==='stock'?renderStock():home?`<div id="home">${renderHome()}</div>`:S.view==='config'?`<div id="home">${renderConfig()}</div>`:renderSheets()}
     ${S.selMode?'':'<button id="mic" title="Hablar">🎤</button>'}
-    <nav><button class="${home?'on':''}" data-view="home"><b>⌂</b>Inicio</button><button class="${S.view==='sheets'?'on':''}" data-view="sheets"><b>☰</b>Pedidos</button><button class="${S.view==='config'?'on':''}" data-view="config"><b>⚙</b>Ajustes</button></nav>`;
+    <nav>${prod?`<button class="${S.view==='pstart'?'on':''}" data-view="pstart"><b>⌂</b>Inicio</button><button class="${S.view==='stock'?'on':''}" data-view="stock"><b>📦</b>Stock</button><button class="${S.view==='config'?'on':''}" data-view="config"><b>⚙</b>Ajustes</button>`:`<button class="${home?'on':''}" data-view="home"><b>⌂</b>Inicio</button><button class="${S.view==='sheets'?'on':''}" data-view="sheets"><b>☰</b>Pedidos</button><button class="${S.view==='config'?'on':''}" data-view="config"><b>⚙</b>Ajustes</button>`}</nav>`;
   // restaurar desplazamientos horizontales (chips y pestañas) para que no salten al inicio
   document.querySelectorAll('.chips,.tabs').forEach((el,i)=>{ if(scrolls[i]!=null) el.scrollLeft=scrolls[i] });
   const hh=document.querySelector('header').offsetHeight; document.documentElement.style.setProperty('--hh',hh+'px');
@@ -1022,6 +1181,7 @@ async function runEdit(text,e){
   });
 }
 async function runCommand(text){
+  if(S.mod==='prod') return runStockCommand(text);
   const ed=parseEdit(text); if(ed) return runEdit(text,ed);
   const r=parseVoice(text);
   if(r.err) return renderVoice(`Escuché: “${text}”. ${r.err}`);
@@ -1117,11 +1277,11 @@ function installHelp(){
       let h=el.querySelector(':scope>.swh'); if(!h){ h=document.createElement('span'); h.className='swh'; el.appendChild(h) }
       h.textContent=dx>0?'✅ Marcar':'↩️ Desmarcar'; h.style.cssText=(dx>0?'left:12px;':'right:12px;')+'opacity:'+Math.min(1,Math.abs(dx)/70) } },{passive:true});
   document.addEventListener('touchend',()=>{ if(!el) return; const e2=el; el=null; e2.style.transition='transform .2s,background .2s'; e2.style.transform=''; e2.style.background=''; const hh=e2.querySelector(':scope>.swh'); if(hh) hh.remove();
-    if(mv&&Math.abs(dx)>70){ S.swAt=Date.now(); const [si,r,i]=e2.dataset.sw.split(':'); openSwipe(+si,+r,i===undefined?null:+i,dx>0?'mark':'unmark') } });
+    if(mv&&Math.abs(dx)>70&&e2.dataset.sw.startsWith('stk:')){ S.swAt=Date.now(); stockSwipe(+e2.dataset.sw.split(':')[1],dx>0?'add':'sub') } else if(mv&&Math.abs(dx)>70){ S.swAt=Date.now(); const [si,r,i]=e2.dataset.sw.split(':'); openSwipe(+si,+r,i===undefined?null:+i,dx>0?'mark':'unmark') } });
 })();
 document.addEventListener('click',async e=>{
   const t=e.target;
-  const v=t.closest('[data-view]'); if(v){S.view=v.dataset.view;S.focusQ=false;render({top:true});return}
+  const v=t.closest('[data-view]'); if(v){S.view=v.dataset.view;S.focusQ=false;render({top:true}); if(S.mod==='prod'&&!S.stock.loaded&&!S.stock.loading) loadStock(); return}
   const pg=t.closest('[data-popgo]'); if(pg){ $('#sheet').classList.remove('on'); S.view='sheets';S.tab=ALL;S.filter='emb';S.q='';S.limit=60;S.focusQ=false;render({top:true});return }
   const dp=t.closest('[data-defper]'); if(dp){ const [k,n]=dp.dataset.defper.split(':'); CFG.defPer=n?{k,n:+n}:{k}; cfgSave(); toast('Predeterminado: '+perLabelOf(CFG.defPer)); render({keep:true}); return }
   const hf=t.closest('[data-hf]'); if(hf){ const k=hf.dataset.hf; S.hf=(S.hf===k&&k!=='emb')?'emb':k; render({keep:true}); return }
@@ -1138,6 +1298,19 @@ document.addEventListener('click',async e=>{
   const lt=t.closest('[data-late]'); if(lt){ S.late=+lt.dataset.late; ls.set('late',S.late); render({keep:true}); notifyBadge(); return }
   const gp=t.closest('[data-gopedido]'); if(gp){ const [si,r]=gp.dataset.gopedido.split(':').map(Number); const it=findItem(si,r); $('#sheet').classList.remove('on'); S.view='sheets';S.tab=si;S.filter='todos';S.q=String(it.v[S.data[si].cols.cliente]||'');S.limit=60;S.focusQ=false;render({top:true});return }
   const po=t.closest('[data-o]'); if(po){const [si,r]=po.dataset.o.split(':').map(Number);openOrder(si,r);return}
+  const msw=t.closest('[data-setmod]'); if(msw){ S.mod=msw.dataset.setmod; ls.set('mod',S.mod); $('#sw2').classList.remove('on'); S.view=S.mod==='prod'?'pstart':'home'; render({top:true}); if(S.mod==='prod'&&!S.stock.loaded) loadStock(); return }
+  const sad=t.closest('[data-sadj]'); if(sad){ const [r,d]=sad.dataset.sadj.split(':').map(Number); const it=S.stock.items.find(x=>x.row===r); try{ await stockAdjust(it,d>0?'add':'sub',1) }catch(er){ toast(er.message,4500) } return }
+  const sst=t.closest('[data-sset]'); if(sst){ openQty(+sst.dataset.sset,'set'); return }
+  const sk=t.closest('[data-sk]'); if(sk){ openItem(+sk.dataset.sk); return }
+  const sct=t.closest('[data-scat]'); if(sct){ S.stock.cat=sct.dataset.scat; render({keep:true}); return }
+  const qc=t.closest('[data-qchip]'); if(qc){ const q=$('#qn'); q.value=(+q.value||0)+(+qc.dataset.qchip); return }
+  const qm=t.closest('[data-qmode]'); if(qm){ const [r,m]=qm.dataset.qmode.split(':'); openQty(+r,m); return }
+  const qd=t.closest('[data-qdel]'); if(qd){ const r=+qd.dataset.qdel, it=S.stock.items.find(x=>x.row===r);
+    $('#sw2p').innerHTML=`<div class="ow">¿Eliminar todo el stock?</div><div class="od" style="margin:6px 0 14px">${esc(it.prod)} quedará en 0 (hoy tiene ${it.stock}).</div><div class="row"><button class="sec2" id="sw2x">Cancelar</button><button class="pri" data-qdelok="${r}">Sí, eliminar</button></div>`; return }
+  const qdo=t.closest('[data-qdelok]'); if(qdo){ const it=S.stock.items.find(x=>x.row===+qdo.dataset.qdelok); $('#sw2').classList.remove('on'); try{ await stockAdjust(it,'set',0) }catch(er){ toast(er.message,4500) } return }
+  if(t.id==='qok'){ const q=S.q2, it=S.stock.items.find(x=>x.row===q.row), n=Math.max(0,Math.round(+$('#qn').value||0)); $('#sw2').classList.remove('on'); try{ await stockAdjust(it,q.mode,n) }catch(er){ toast(er.message,4500) } return }
+  if(t.id==='it_save'){ saveItem(+t.dataset.row); return }
+  if(t.dataset&&t.dataset.onoff){ t.classList.toggle('on'); return }
   const sa=t.closest('[data-sact]'); if(sa){ const [si,r,i,fk,mode]=sa.dataset.sact.split(':'); const v=mode==='mark';
     try{ if(i!=='') await toggleSet(+si,+r,+i,fk,v); else await setOrderFlag(+si,+r,fk,v); toast(v?'✅ Marcado':'↩️ Desmarcado',1200); render({keep:true}); if($('#sheet').classList.contains('on')&&$('#sheet').dataset.mode==='order') openOrder(+si,+r); openSwipe(+si,+r,i===''?null:+i,mode) }catch(er){ toast('No se pudo guardar: '+er.message,4500) } return }
   if(t.id==='sw2x'||t.id==='sw2'){ $('#sw2').classList.remove('on'); return }
@@ -1150,9 +1323,10 @@ document.addEventListener('click',async e=>{
   if(t.id==='vhab'){startListen(false);return}
   if(t.id==='vcl'||t.id==='voice'){$('#voice').classList.remove('on');return}
   if(t.id==='tact'){ $('#toast').style.display='none'; const f=window.__undo; window.__undo=null; if(f) f(); return }
-  const ac=t.closest('[data-act]'); if(ac){ if(ac.dataset.act==='reload') loadAll(); if(ac.dataset.act==='notif') askNotif();
+  const ac=t.closest('[data-act]'); if(ac){ if(ac.dataset.act==='reload'){ if(S.mod==='prod') loadStock(); else loadAll() } if(ac.dataset.act==='notif') askNotif();
     if(ac.dataset.act==='share') shareList();
     if(ac.dataset.act==='install') doInstall();
+    if(ac.dataset.act==='modsw'){ $('#sw2p').innerHTML=`<div class="ow" style="margin-bottom:10px">Cambiar de sección</div><div class="tg">${Object.keys(MODS).map(k=>`<button class="${S.mod===k?'on':''}" data-setmod="${k}">${k==='prod'?'📦 ':'📋 '}${esc(modName(k))}</button>`).join('')}</div><div class="note" style="margin-top:10px">Cada sección usa su propia planilla.</div><div class="row"><button class="pri" id="sw2x">Cerrar</button></div>`; $('#sw2').classList.add('on') }
     if(ac.dataset.act==='defper'){ CFG.defPer=JSON.parse(JSON.stringify(S.per)); cfgSave(); toast('Predeterminado: '+perLabel()); render({keep:true}) }
     if(ac.dataset.act==='popup'){ showPopup() }
     if(ac.dataset.act==='perOpen'){ S.perOpen=!S.perOpen; render({keep:true}) }
@@ -1185,6 +1359,7 @@ function cfgFilter(q){
   });
 }
 document.addEventListener('input',e=>{
+  if(e.target.id==='sq'){ S.stock.q=e.target.value; clearTimeout(S.sdt); S.sdt=setTimeout(()=>{ const pos=e.target.selectionStart; render({keep:true}); const q=$('#sq'); if(q){q.focus();q.setSelectionRange(pos,pos)} },180); return }
   if(e.target.id==='cs'){ cfgFilter(e.target.value); return }
   if(e.target.id==='q'){S.q=e.target.value;S.focusQ=true;S.limit=60;clearTimeout(S.dt);S.dt=setTimeout(()=>render({keep:true}),200)}
 });
@@ -1201,7 +1376,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v22';
+const APP_V='v23';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

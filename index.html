@@ -167,6 +167,9 @@ button.alert{font-size:14px;color:var(--ink);font-family:inherit}
 .cli{margin:12px 0 2px;padding:0;border:0}
 .cli .who{font-size:19px;font-weight:800;letter-spacing:-.01em;color:var(--ink)}
 .card .t{font-size:14px;font-weight:600;color:var(--mut);margin:2px 0 8px}
+.tgrp{margin:10px 0 4px}.th{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--coral-d);background:var(--peach-l);border-radius:10px;padding:6px 10px}.th i{font-style:normal}
+.orow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 2px;border-bottom:1px solid var(--line)}.orow:last-child{border:0}
+.orow b{display:block;font-size:15px}.orow span{display:block;font-size:13px;color:var(--mut)}.orow small{font-size:11px;color:#b5aaa3;white-space:nowrap;text-align:right}
 </style>
 </head>
 <body>
@@ -574,7 +577,7 @@ function renderHome(){
       return `<div class="sec">Para embalar por planilla</div>`+list.map(p=>{
         const keys=Object.keys(p.tipos).sort((a,b)=>p.tipos[b]-p.tipos[a]);
         return `<div class="ch"><div class="r"><b>${SHEETS[p.si].label}</b><span class="n">${p.emb.length}</span></div>`+
-          (keys.length?`<ul>${keys.map(k=>`<li><span>${esc(k)}</span><i>${p.tipos[k]}</i></li>`).join('')}</ul>`:'<div class="note">Nada para embalar</div>')+
+          (keys.length?keys.map(k=>`<div class="tgrp"><div class="th"><span>${esc(k)}</span><i>${p.tipos[k]}</i></div>${p.emb.filter(it=>tipo(it,S.data[p.si])===k).sort((a,b)=>(a.date?+a.date:0)-(b.date?+b.date:0)).map(it=>{const D=S.data[p.si];const nm=esc(it.v[D.cols.cliente]||'(sin nombre)'),dg=esc(it.v[D.cols.diseno]||'(sin diseño)');return `<div class="orow"><div><b>${nm}</b><span>${dg}</span></div><small>${it.date?it.date.toLocaleDateString('es-AR',{day:'numeric',month:'short'}):'s/f'} · #${it.row}</small></div>`}).join('')}</div>`).join(''):'<div class="note">Nada para embalar</div>')+
           `<div class="note">Embalados sin despachar: ${p.desp} · En producción: ${p.prod}${p.canc?` · Cancelados: ${p.canc}`:''}</div>`+
           `<button class="go" data-go-tab="${p.si}">Ver pedidos de ${SHEETS[p.si].short}</button></div>`;
       }).join('');
@@ -981,7 +984,20 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-window.addEventListener('load',()=>{
+const APP_V='v13';
+async function checkUpdate(){
+  try{
+    const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());
+    const m=h.match(/APP_V='(v\d+)'/);
+    if(m&&m[1]!==APP_V&&!sessionStorage.getItem('upd'+m[1])){
+      sessionStorage.setItem('upd'+m[1],'1');
+      if(window.caches){ const ks=await caches.keys(); await Promise.all(ks.map(k=>caches.delete(k))) }
+      const rs=await navigator.serviceWorker.getRegistrations(); await Promise.all(rs.map(r=>r.unregister()));
+      location.reload();
+    }
+  }catch(e){}
+}
+window.addEventListener('load',()=>{ checkUpdate();
   if(!ls.get('email')) ls.set('email','fakundo713@gmail.com');
   S.view=CFG.start||'home';
   if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});

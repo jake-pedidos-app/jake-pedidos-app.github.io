@@ -540,6 +540,7 @@ async function setField(si,row,c,nv,fechaOverride){
   logTouch(si,row,(S.data[si].head[c]||'col '+c)+': '+(typeof nv==='boolean'?(nv?'✓':'✗'):nv));
   const D=S.data[si]; const item=findItem(si,row);
   const ch={[c]:nv};
+  if(c===D.cols.despachar && nv && D.cols.embalar>=0 && !ok(item,D.cols.embalar)){ ch[D.cols.embalar]=true; logAct(si,row,(D.head[D.cols.embalar]||'Embalar')+': ✓ (auto)') }
   if(c===D.cols.despachar && D.cols.fenvio>=0){
     if(fechaOverride!==undefined) ch[D.cols.fenvio]=fechaOverride;
     else if(nv && !String(item.v[D.cols.fenvio]).trim()) ch[D.cols.fenvio]=D.dateMode==='serial'?hoySerial():hoyTexto();
@@ -1415,7 +1416,11 @@ function installHelp(){
 /* ---------- Eventos ---------- */
 (function(){
   let sx=0,sy=0,el=null,dx=0,mv=false;
-  document.addEventListener('touchstart',e=>{ el=e.target.closest&&e.target.closest('[data-sw]'); if(!el||e.touches.length>1){el=null;return} sx=e.touches[0].clientX; sy=e.touches[0].clientY; dx=0; mv=false },{passive:true});
+  const clean=()=>document.querySelectorAll('.swh2').forEach(x=>{ if(!el||x!==el._h) x.remove() });
+  document.addEventListener('touchcancel',()=>{ if(el){ el.style.transform=''; if(el._bg!==undefined){el.style.background=el._bg;el._bg=undefined;el.style.zIndex=''} } el=null; document.querySelectorAll('.swh2').forEach(x=>x.remove()) });
+  document.addEventListener('click',()=>setTimeout(()=>{ if(!el) document.querySelectorAll('.swh2').forEach(x=>x.remove()) },0),true);
+  setInterval(()=>{ if(!el) document.querySelectorAll('.swh2').forEach(x=>x.remove()) },1500);
+  document.addEventListener('touchstart',e=>{ clean(); el=e.target.closest&&e.target.closest('[data-sw]'); if(!el||e.touches.length>1){el=null;return} sx=e.touches[0].clientX; sy=e.touches[0].clientY; dx=0; mv=false },{passive:true});
   document.addEventListener('touchmove',e=>{ if(!el) return; dx=e.touches[0].clientX-sx; const dy=e.touches[0].clientY-sy;
     if(!mv&&Math.abs(dx)>12&&Math.abs(dx)>Math.abs(dy)*1.5) mv=true;
     if(mv){ el.style.transition='none'; el.style.transform='translateX('+Math.max(-96,Math.min(96,dx*.6))+'px)';
@@ -1528,7 +1533,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v31';
+const APP_V='v32';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

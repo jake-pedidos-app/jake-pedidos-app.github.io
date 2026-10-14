@@ -7,3 +7,4 @@ self.addEventListener('fetch', e => {
   if (u.origin !== location.origin) return;
   e.respondWith(fetch(e.request).catch(() => caches.match(e.request)));
 });
+// rebuild 1791991445

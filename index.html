@@ -384,7 +384,7 @@ async function loadAll(silent){
 }
 
 /* ---------- Reglas ---------- */
-const NM=(it,D)=>{ const n=NM(it,D); const o=D.cols.orden>=0?String(it.v[D.cols.orden]||'').trim():''; return n+(o?` <span class="ono">#${esc(o)}</span>`:'') };
+const NM=(it,D)=>{ const n=esc(it.v[D.cols.cliente]||'(sin nombre)'); const o=D.cols.orden>=0?String(it.v[D.cols.orden]||'').trim():''; return n+(o?` <span class="ono">#${esc(o)}</span>`:'') };
 const ok = (it,c)=>c>=0&&(it.raw[c]===true||it.v[c]==='TRUE');
 function isCancel(it){return it.v.some(x=>/cancelad/i.test(String(x)))}
 function perBounds(){
@@ -1528,7 +1528,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v30';
+const APP_V='v31';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

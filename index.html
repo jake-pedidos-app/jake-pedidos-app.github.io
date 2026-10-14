@@ -393,7 +393,7 @@ function renderHome(){
   if(S.loading&&!S.data[0]) return '<div class="skel"></div><div class="skel"></div>';
   if(!S.data[0]) return `<div class="msg">${esc(S.err||'Sin datos')}<br><br><button class="chip" data-act="reload">Reintentar</button></div>`;
   const sum=summarize();
-  let h=`<div class="hello">Hoy<b>Pedidos Jake</b></div>
+  let h=`<div style="margin:0 0 10px">${installBtn()}</div><div class="hello">Hoy<b>Pedidos Jake</b></div>
   <div class="kpis">
     <button class="kpi main" data-go="emb"><span>Para embalar</span><b>${sum.emb.length}</b></button>
     <button class="kpi" data-go="desp"><span>Embalados, sin despachar</span><b>${sum.desp}</b></button>
@@ -481,7 +481,7 @@ function renderSetup(){
 }
 function renderLogin(){
   $('#app').innerHTML=`<div class="login"><img src="jk-512.png" alt=""><h2>Jake Central</h2>
-  <button id="go">${ls.get('signed')==='1'?'Continuar':'Ingresar con Google'}</button><small>Usá la cuenta que tiene acceso a la planilla “Planillas de PEDIDOS”. La sesión queda guardada en este dispositivo.</small></div>`;
+  <button id="go">${ls.get('signed')==='1'?'Continuar':'Ingresar con Google'}</button><div style="margin-top:14px">${installBtn()}</div><small>Usá la cuenta que tiene acceso a la planilla “Planillas de PEDIDOS”. La sesión queda guardada en este dispositivo.</small></div>`;
 }
 function openEdit(si,rowNum){
   const D=S.data[si], it=findItem(si,rowNum);
@@ -658,6 +658,33 @@ async function startListen(retry){
   try{ rec.start() }catch(e){ renderVoice('No pude iniciar el micrófono. Escribí el comando abajo.') }
 }
 
+/* ---------- Instalación como app ---------- */
+let deferredInstall=null;
+const isStandalone=()=>(window.matchMedia&&matchMedia('(display-mode: standalone)').matches)||navigator.standalone===true;
+window.addEventListener('beforeinstallprompt',e=>{e.preventDefault();deferredInstall=e;render({keep:true})});
+window.addEventListener('appinstalled',()=>{deferredInstall=null;toast('App instalada');render({keep:true})});
+function installBtn(){
+  if(isStandalone()) return '';
+  return deferredInstall
+    ? `<button class="chip on" data-act="install" style="font-size:14px;padding:10px 16px">📲 Instalar app</button>`
+    : `<button class="chip" data-act="installhelp" style="font-size:14px;padding:10px 16px">📲 Cómo instalar</button>`;
+}
+async function doInstall(){
+  if(!deferredInstall) return installHelp();
+  deferredInstall.prompt();
+  try{ await deferredInstall.userChoice }catch(e){}
+  deferredInstall=null; render({keep:true});
+}
+function installHelp(){
+  $('#sp').innerHTML=`<h3 style="margin:0 0 8px">Instalar Jake Central</h3>
+    <div class="note" style="font-size:14px;color:var(--ink);line-height:1.5">
+    <b>Android (Chrome):</b> menú ⋮ → <b>Instalar app</b> o <b>Agregar a pantalla de inicio</b>.<br>
+    <b>iPhone (Safari):</b> botón Compartir → <b>Agregar a inicio</b>.<br><br>
+    Si ya tenías la app instalada y no aparece el botón, es porque el navegador la considera instalada: quitá el ícono viejo de la pantalla de inicio (mantenelo apretado → Desinstalar), cerrá Chrome por completo y volvé a abrir este link.</div>
+    <div class="row"><button class="pri" id="cx">Entendido</button></div>`;
+  $('#sheet').classList.add('on');
+}
+
 /* ---------- Eventos ---------- */
 document.addEventListener('click',async e=>{
   const t=e.target;
@@ -677,6 +704,8 @@ document.addEventListener('click',async e=>{
   if(t.id==='tact'){ $('#toast').style.display='none'; const f=window.__undo; window.__undo=null; if(f) f(); return }
   const ac=t.closest('[data-act]'); if(ac){ if(ac.dataset.act==='reload') loadAll(); if(ac.dataset.act==='notif') askNotif();
     if(ac.dataset.act==='share') shareList();
+    if(ac.dataset.act==='install') doInstall();
+    if(ac.dataset.act==='installhelp') installHelp();
     if(ac.dataset.act==='group'){S.group=!S.group;ls.set('group',S.group?'1':'0');render({keep:true})}
     if(ac.dataset.act==='select'){S.selMode=!S.selMode;S.sel.clear();render({keep:true})}
     if(ac.dataset.act==='selall'){S.visible.forEach(k=>S.sel.add(k));render({keep:true})}

@@ -186,6 +186,9 @@ button.alert{font-size:14px;color:var(--ink);font-family:inherit}
 .orow1 small{flex:none;font-size:11px;color:#b5aaa3}
 .ch .r{padding-right:62px}
 #mic{width:52px;height:52px;font-size:21px;opacity:.92}
+.orow1 .nm{flex:1;min-width:0;display:block}.orow1 .nm b{display:block;font-size:15px}.orow1 .nm em{display:block;font-style:normal;font-size:12.5px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.orow1 .src{flex:none;margin:0}
+.setrow{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:14px;font-weight:600}
 </style>
 </head>
 <body>
@@ -629,6 +632,12 @@ function homeList(fk){
   });
 }
 function tipos1(it,D){ return tipos(it,D) }
+function setsOf(it,D){
+  const tp=tipos(it,D);
+  const ds=String((D.cols.diseno>=0?it.v[D.cols.diseno]:'')||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
+  return tp.map((k,i)=>({tipo:k,design:(ds.length===tp.length?ds[i]:(ds.length?ds.join(' / '):'(sin diseño)'))}));
+}
+const FDATE=d=>d?d.toLocaleDateString('es-AR',{day:'numeric',month:'short'}):'s/f';
 function renderHome(){
   if(S.loading&&!S.data[0]) return '<div class="skel"></div><div class="skel"></div>';
   if(!S.data[0]) return `<div class="msg">${esc(S.err||'Sin datos')}<br><br><button class="chip" data-act="reload">Reintentar</button></div>`;
@@ -652,14 +661,15 @@ function renderHome(){
       return `<div class="sec">${HTITLE[fk]} por planilla</div>`+L.map(l=>{
         const D=S.data[l.si];
         return `<div class="ch"><div class="r"><b>${SHEETS[l.si].label}</b><span class="n">${l.items.length}</span></div>`+
-          (l.items.length?`<div class="olist">${[...l.items].sort((a,b)=>{const ta=tipo(a,D),tb=tipo(b,D);return ta<tb?-1:ta>tb?1:((a.date?+a.date:0)-(b.date?+b.date:0))}).map(it=>`<button class="orow1" data-o="${l.si}:${it.row}"><span class="tp">${esc(tipo(it,D))}</span><b>${esc(it.v[D.cols.cliente]||'(sin nombre)')}</b><small>${it.date?it.date.toLocaleDateString('es-AR',{day:'numeric',month:'short'}):'s/f'}</small><i>›</i></button>`).join('')}</div>`:'<div class="note">Nada en esta lista</div>')+
-          `<button class="go" data-go-tab="${l.si}" data-gof="${fk}">Ver pedidos de ${SHEETS[l.si].short}</button></div>`;
+          (l.items.length?`<div class="olist">${[...l.items].sort((a,b)=>{const ta=tipo(a,D),tb=tipo(b,D);return ta<tb?-1:ta>tb?1:((a.date?+a.date:0)-(b.date?+b.date:0))}).map(it=>`<button class="orow1" data-o="${l.si}:${it.row}"><span class="tp">${esc(tipo(it,D))}</span><span class="nm"><b>${esc(it.v[D.cols.cliente]||'(sin nombre)')}</b><em>${esc(setsOf(it,D).map(x=>x.design).join(' + '))}</em></span><small>${FDATE(it.date)}</small><i>›</i></button>`).join('')}</div>`:'<div class="note">Nada en esta lista</div>')+
+          `</div>`;
       }).join('');
     },
     totals:()=>{
-      const fk=S.hf||'emb', tt={}; homeList(fk).forEach(l=>Object.entries(l.tipos).forEach(([k,n])=>tt[k]=(tt[k]||0)+n));
-      const tk=Object.keys(tt).sort((a,b)=>tt[b]-tt[a]);
-      return tk.length?`<div class="sec">Total ${HTITLE[fk].toLowerCase()} por tamaño y formato</div><div class="ch"><ul style="margin:0">${tk.map(k=>`<li><span>${esc(k)}</span><i>${tt[k]}</i></li>`).join('')}</ul></div>`:'';
+      const fk=S.hf||'emb', g={};
+      homeList(fk).forEach(l=>{ const D=S.data[l.si]; l.items.forEach(it=>setsOf(it,D).forEach(x=>{ (g[x.tipo]=g[x.tipo]||[]).push({si:l.si,it,design:x.design,D}) })) });
+      const keys=Object.keys(g).sort((a,b)=>g[b].length-g[a].length); if(!keys.length) return '';
+      return `<div class="sec">Total ${HTITLE[fk].toLowerCase()} por tamaño y formato</div>`+keys.map(k=>`<div class="ch"><div class="th"><span>${esc(k)}</span><i>${g[k].length}</i></div><div class="olist">${g[k].map(x=>`<button class="orow1" data-o="${x.si}:${x.it.row}"><span class="nm"><b>${esc(x.it.v[x.D.cols.cliente]||'(sin nombre)')}</b><em>${esc(x.design)}</em></span><span class="src">${SHEETS[x.si].short}</span><small>${FDATE(x.it.date)}</small><i>›</i></button>`).join('')}</div></div>`).join('');
     },
     period:()=>`${perUI()}
       <div class="note">Para embalar = Imp, Prep Vin y Pegar tildados, sin Embalar ni cancelar.${S.loadedAt?` · Actualizado ${new Date(S.loadedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}`:''}</div>`
@@ -778,13 +788,13 @@ function openOrder(si,row){
   const fe=D.cols.fenvio>=0?parseFecha(it.v[D.cols.fenvio],it.raw[D.cols.fenvio]):null;
   const nt=D.cols.notas>=0?it.v[D.cols.notas]:'';
   $('#sp').innerHTML=`<div class="ohead"><div><div class="ow">${esc(it.v[D.cols.cliente]||'(sin nombre)')}</div><div class="od">${esc(it.v[D.cols.diseno]||'(sin diseño)')}</div></div><span class="src">${SHEETS[si].short} #${row}</span></div>
-  <span class="tipo">${esc(tipo(it,D))}</span>
+  <div class="sets">${setsOf(it,D).map((x,i)=>`<div class="setrow"><span class="tipo">${esc(x.tipo)}</span><span>${esc(x.design)}</span></div>`).join('')}</div>
   <div class="tg" style="margin-top:14px">${tg}</div>
   ${D.cols.fecha>=0?`<div class="f"><label>📅 Fecha del pedido ${it.date?'· '+ageTxt(it.date):''}</label><input type="date" data-od="fecha" value="${dv(it.date)}"></div>`:''}
   ${D.cols.fenvio>=0?`<div class="f"><label>📦 Fecha de envío</label><input type="date" data-od="fenvio" value="${dv(fe)}"></div>`:''}
   ${D.cols.enviar>=0&&it.v[D.cols.enviar]?`<div class="note">🚚 ${esc(it.v[D.cols.enviar])}</div>`:''}
   ${nt?`<div class="note">📝 ${esc(nt)}</div>`:''}
-  <div class="row"><button class="sec2" id="cx">Cerrar</button><button class="pri" data-e="${si}:${row}">Editar todo</button></div>`;
+  <div class="row"><button class="sec2" id="cx">Cerrar</button><button class="sec2" data-gopedido="${si}:${row}">Ver en Pedidos</button><button class="pri" data-e="${si}:${row}">Editar todo</button></div>`;
   $('#sheet').classList.add('on'); $('#sheet').dataset.si=si; $('#sheet').dataset.row=row; $('#sheet').dataset.mode='order';
 }
 async function orderDate(el){
@@ -1050,6 +1060,7 @@ document.addEventListener('click',async e=>{
   const cf=t.closest('[data-cfg]'); if(cf){ cfgToggle(cf.dataset.cfg); return }
   const mv=t.closest('[data-move]'); if(mv){ cfgMove(mv.dataset.move); return }
   const lt=t.closest('[data-late]'); if(lt){ S.late=+lt.dataset.late; ls.set('late',S.late); render({keep:true}); notifyBadge(); return }
+  const gp=t.closest('[data-gopedido]'); if(gp){ const [si,r]=gp.dataset.gopedido.split(':').map(Number); const it=findItem(si,r); $('#sheet').classList.remove('on'); S.view='sheets';S.tab=si;S.filter='todos';S.q=String(it.v[S.data[si].cols.cliente]||'');S.limit=60;S.focusQ=false;render({top:true});return }
   const po=t.closest('[data-o]'); if(po){const [si,r]=po.dataset.o.split(':').map(Number);openOrder(si,r);return}
   const pt=t.closest('[data-pt]'); if(pt){const [si,r,c]=pt.dataset.pt.split(':').map(Number);const it=findItem(si,r);setField(si,r,c,!ok(it,c)).then(()=>{toast('✓ Guardado');openOrder(si,r)}).catch(e=>toast('No se pudo guardar: '+e.message,4500));return}
   const tg=t.closest('[data-t]'); if(tg){const [si,r,c]=tg.dataset.t.split(':').map(Number);toggle(si,r,c);return}
@@ -1109,7 +1120,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v19';
+const APP_V='v20';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

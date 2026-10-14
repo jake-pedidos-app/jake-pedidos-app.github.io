@@ -172,6 +172,10 @@ button.alert{font-size:14px;color:var(--ink);font-family:inherit}
 .orow b{display:block;font-size:15px}.orow span{display:block;font-size:13px;color:var(--mut)}.orow small{font-size:11px;color:#b5aaa3;white-space:nowrap;text-align:right}
 .csearch{width:100%;box-sizing:border-box;border:0;background:#fff;border-radius:16px;padding:13px 16px;font:inherit;margin:0 0 12px;box-shadow:0 2px 10px rgba(58,52,49,.07)}
 .wand{font-size:20px}
+.olist{margin:8px 0 4px}.orow1{display:flex;align-items:center;gap:8px;width:100%;text-align:left;background:none;border:0;border-bottom:1px solid var(--line);padding:12px 2px;font:inherit;color:var(--ink)}.orow1:last-child{border:0}
+.orow1 .tp{flex:none;background:var(--peach-l);color:var(--coral-d);border-radius:999px;padding:3px 10px;font-size:12px;font-weight:700;white-space:nowrap}
+.orow1 b{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:15px}.orow1 i{font-style:normal;color:#c5b9b1;font-size:20px}
+.ohead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px}.ow{font-size:21px;font-weight:800;letter-spacing:-.01em}.od{font-size:14px;color:var(--mut);margin-top:2px}
 </style>
 </head>
 <body>
@@ -482,37 +486,51 @@ function shareApp(){
 }
 
 /* ---------- Tour guiado ---------- */
-const TOUR=[
- {v:'home',sel:'.brand',t:'Bienvenido a Jake Central',x:'Tocá el logo en cualquier momento para volver al Inicio.'},
- {v:'home',sel:'.kpis',t:'Resumen',x:'Cada tarjeta cuenta pedidos. Tocá una y te lleva a esa lista ya filtrada. “Para embalar” = Imp, Prep Vin y Pegar tildados.'},
- {v:'home',sel:'.sec',t:'Por planilla',x:'Acá ves qué embalar de cada planilla, por tamaño y formato.'},
- {v:'sheets',sel:'.tabs',t:'Pedidos',x:'Elegí Todas, MercadoLibre, TiendaNube o Reclamos.'},
- {v:'sheets',sel:'.chips',t:'Filtros',x:'Deslizá de lado para filtrar: para embalar, demorados, sin pago, cancelados…'},
- {v:'sheets',sel:'.card',t:'Un pedido',x:'Tocá los tildes (Imprimir, Preparar, Pegar, Embalar, Despachar). Al tildar Despachar se carga sola la fecha de envío. Tocá la tarjeta para editar cualquier columna.'},
- {v:'sheets',sel:'[data-act=select]',t:'Acciones',x:'Seleccionar varios para embalar/despachar de una, agrupar por tamaño y compartir la lista.'},
- {v:'sheets',sel:'#mic',t:'Asistente de voz',x:'Tocá el micrófono y decí, por ejemplo: “embalar el pedido de María”. Se puede deshacer.'},
- {v:'config',sel:'nav button[data-view=config]',t:'Ajustes',x:'Acá ocultás y ordenás las secciones del Inicio, cambiás reglas, actualizás datos, cerrás sesión y compartís la app. Podés repetir esta guía desde Ajustes.'}
-];
-let tourI=-1;
+const TOURS={
+ home:[
+  {sel:'.brand',t:'Inicio',x:'Esta es la pantalla de resumen. Tocá el logo en cualquier momento para volver acá.'},
+  {sel:'.perbox',t:'Período',x:'Elegí qué pedidos cuentan: hoy, 3 días, semana, mes… o tocá “Personalizar” para poner tus propios días o un rango de fechas. El interruptor ignora los pedidos sin fecha.'},
+  {sel:'.kpis',t:'Resumen',x:'Cada tarjeta cuenta pedidos. Tocá una y te lleva a esa lista ya filtrada.'},
+  {sel:'.ch',t:'Para embalar por planilla',x:'Cada línea es un pedido: tamaño y formato + nombre del cliente. Tocá una línea para abrir el detalle y marcarlo (Embalar, Despachar…) o cambiar la fecha.'},
+  {sel:'#mic',t:'Asistente de voz',x:'Tocá el micrófono y decí, por ejemplo: “embalé el pedido de María” o “cambiá la fecha de Juan a ayer”. Se puede deshacer.'},
+  {sel:'nav',t:'Menú',x:'Inicio, Pedidos (listas completas con filtros) y Ajustes. En cada pantalla, la varita 🪄 de arriba te da una guía propia.'}
+ ],
+ sheets:[
+  {sel:'.tabs',t:'Planillas',x:'Elegí Todas, Mercado Libre, Tienda Nube o Reclamos/WSP.'},
+  {sel:'#q',t:'Buscador',x:'Buscá por cliente, diseño o notas.'},
+  {sel:'#fchips',t:'Filtros',x:'Deslizá de lado: para embalar, embalados, demorados, sin pago, cancelados, sin fecha, todos. El número es la cantidad.'},
+  {sel:'.card',t:'Un pedido',x:'Arriba: fecha (verde reciente, amarillo, rojo demorado) y planilla. Abajo el nombre, el diseño y el tamaño.'},
+  {sel:'.tg',t:'Tildes',x:'Tocá Imprimir, Preparar, Pegar, Embalar o Despachar para marcarlo. Al tildar Despachar se carga sola la fecha de envío.'},
+  {sel:'.edit',t:'Editar',x:'Abre el pedido para cambiar cualquier columna.'},
+  {sel:'[data-act=select]',t:'Seleccionar varios',x:'Marcá muchos pedidos y embalalos o despachalos de una vez.'},
+  {sel:'#mic',t:'Voz',x:'Decí qué hacer con un pedido y lo hace por vos.'}
+ ],
+ config:[
+  {sel:'#cs',t:'Buscador de ajustes',x:'Escribí una palabra (fecha, aviso, orden…) y quedan solo los ajustes que coinciden.'},
+  {sel:'.setcard',t:'Pantalla de inicio',x:'Con los interruptores ocultás secciones y con las flechas ↑ ↓ las reordenás.'},
+  {sel:'.setcard:has([data-late])',t:'Planillas y reglas',x:'Elegí qué planillas se ven en el Inicio, el período, desde cuántos días un pedido es “demorado” y con qué pantalla abre la app.'},
+  {sel:'[data-act=opensheet]',t:'Acceso de otras personas',x:'Quien tenga acceso a la planilla de Google puede usar la app con su mail. Desde acá abrís la planilla para compartirla y compartís el link de la app.'},
+  {sel:'[data-act=reload]',t:'Cuenta y datos',x:'Actualizá los datos a mano, reiniciá los ajustes del inicio o cerrá sesión.'}
+ ]
+};
+let TL=[],tourI=-1;
 function tourStop(){ tourI=-1; const t=document.getElementById('tour'); if(t) t.remove(); ls.set('toured','1') }
 function tourShow(i){
-  if(i>=TOUR.length){ tourStop(); S.view='home'; render(); return }
-  tourI=i; const st=TOUR[i];
-  if(S.view!==st.v){ S.view=st.v; render({keep:true}) }
+  if(i>=TL.length){ tourStop(); return }
+  tourI=i; const st=TL[i];
+  let el=document.querySelector(st.sel);
+  if(!el){ tourShow(i+1); return }
+  el.scrollIntoView({block:'center'});
   setTimeout(()=>{
-    let el=document.querySelector(st.sel);
-    if(!el){ tourShow(i+1); return }
-    el.scrollIntoView({block:'center'});
-    setTimeout(()=>{
-      const r=el.getBoundingClientRect(); let t=document.getElementById('tour');
-      if(!t){ t=document.createElement('div'); t.id='tour'; document.body.appendChild(t) }
-      const pad=6, below=r.top<innerHeight/2;
-      t.innerHTML=`<div class="hole" style="top:${r.top-pad}px;left:${r.left-pad}px;width:${Math.min(r.width,innerWidth)+pad*2}px;height:${Math.min(r.height,innerHeight*.5)+pad*2}px"></div>
-      <div class="tip" style="${below?'bottom:16px':'top:16px'}"><h4>${st.t}</h4>${st.x}<div class="tb"><span>${i+1} / ${TOUR.length}</span><span style="flex:1"></span><button class="sk" data-tour="skip">Salir</button><button data-tour="next">${i===TOUR.length-1?'Listo':'Siguiente'}</button></div></div>`;
-    },250);
-  },120);
+    el=document.querySelector(st.sel)||el;
+    const r=el.getBoundingClientRect(); let t=document.getElementById('tour');
+    if(!t){ t=document.createElement('div'); t.id='tour'; document.body.appendChild(t) }
+    const pad=6, below=r.top<innerHeight/2;
+    t.innerHTML=`<div class="hole" style="top:${r.top-pad}px;left:${Math.max(0,r.left-pad)}px;width:${Math.min(r.width+pad*2,innerWidth)}px;height:${Math.min(r.height,innerHeight*.5)+pad*2}px"></div>
+    <div class="tip" style="${below?'bottom:16px':'top:16px'}"><h4>${st.t}</h4>${st.x}<div class="tb"><span>${i+1} / ${TL.length}</span><span style="flex:1"></span><button class="sk" data-tour="skip">Salir</button><button data-tour="next">${i===TL.length-1?'Listo':'Siguiente'}</button></div></div>`;
+  },250);
 }
-function tourStart(){ S.view='home'; render(); tourShow(0) }
+function tourStart(){ tourStop(); TL=TOURS[S.view]||TOURS.home; setTimeout(()=>tourShow(0),80) }
 
 /* ---------- Render ---------- */
 function matches(it,D,st){
@@ -579,7 +597,7 @@ function renderHome(){
       return `<div class="sec">Para embalar por planilla</div>`+list.map(p=>{
         const keys=Object.keys(p.tipos).sort((a,b)=>p.tipos[b]-p.tipos[a]);
         return `<div class="ch"><div class="r"><b>${SHEETS[p.si].label}</b><span class="n">${p.emb.length}</span></div>`+
-          (keys.length?keys.map(k=>`<div class="tgrp"><div class="th"><span>${esc(k)}</span><i>${p.tipos[k]}</i></div>${p.emb.filter(it=>tipo(it,S.data[p.si])===k).sort((a,b)=>(a.date?+a.date:0)-(b.date?+b.date:0)).map(it=>{const D=S.data[p.si];const nm=esc(it.v[D.cols.cliente]||'(sin nombre)'),dg=esc(it.v[D.cols.diseno]||'(sin diseño)');return `<div class="orow"><div><b>${nm}</b><span>${dg}</span></div><small>${it.date?it.date.toLocaleDateString('es-AR',{day:'numeric',month:'short'}):'s/f'} · #${it.row}</small></div>`}).join('')}</div>`).join(''):'<div class="note">Nada para embalar</div>')+
+          (keys.length?`<div class="olist">${[...p.emb].sort((a,b)=>{const ta=tipo(a,S.data[p.si]),tb=tipo(b,S.data[p.si]);return ta<tb?-1:ta>tb?1:((a.date?+a.date:0)-(b.date?+b.date:0))}).map(it=>{const D=S.data[p.si];return `<button class="orow1" data-o="${p.si}:${it.row}"><span class="tp">${esc(tipo(it,D))}</span><b>${esc(it.v[D.cols.cliente]||'(sin nombre)')}</b><i>›</i></button>`}).join('')}</div>`:'<div class="note">Nada para embalar</div>')+
           `<div class="note">Embalados sin despachar: ${p.desp} · En producción: ${p.prod}${p.canc?` · Cancelados: ${p.canc}`:''}</div>`+
           `<button class="go" data-go-tab="${p.si}">Ver pedidos de ${SHEETS[p.si].short}</button></div>`;
       }).join('');
@@ -691,6 +709,28 @@ function renderSetup(){
 function renderLogin(){
   $('#app').innerHTML=`<div class="login"><img src="jk-512.png" alt=""><h2>Jake Central</h2>
   <button id="go">${ls.get('signed')==='1'?'Continuar':'Ingresar con Google'}</button><div style="margin-top:14px">${installBtn()}</div><small>Usá la cuenta que tiene acceso a la planilla “Planillas de PEDIDOS”. La sesión queda guardada en este dispositivo.</small></div>`;
+}
+function openOrder(si,row){
+  const D=S.data[si], it=findItem(si,row); if(!it) return;
+  const tg=FLAGS.filter(f=>D.cols[f.key]>=0).map(f=>{const o=ok(it,D.cols[f.key]);return `<button class="${o?'on':''}" data-pt="${si}:${row}:${D.cols[f.key]}">${o?'✓ ':''}${f.label}</button>`}).join('');
+  const dv=d=>d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';
+  const fe=D.cols.fenvio>=0?parseFecha(it.v[D.cols.fenvio],it.raw[D.cols.fenvio]):null;
+  const nt=D.cols.notas>=0?it.v[D.cols.notas]:'';
+  $('#sp').innerHTML=`<div class="ohead"><div><div class="ow">${esc(it.v[D.cols.cliente]||'(sin nombre)')}</div><div class="od">${esc(it.v[D.cols.diseno]||'(sin diseño)')}</div></div><span class="src">${SHEETS[si].short} #${row}</span></div>
+  <span class="tipo">${esc(tipo(it,D))}</span>
+  <div class="tg" style="margin-top:14px">${tg}</div>
+  ${D.cols.fecha>=0?`<div class="f"><label>📅 Fecha del pedido ${it.date?'· '+ageTxt(it.date):''}</label><input type="date" data-od="fecha" value="${dv(it.date)}"></div>`:''}
+  ${D.cols.fenvio>=0?`<div class="f"><label>📦 Fecha de envío</label><input type="date" data-od="fenvio" value="${dv(fe)}"></div>`:''}
+  ${D.cols.enviar>=0&&it.v[D.cols.enviar]?`<div class="note">🚚 ${esc(it.v[D.cols.enviar])}</div>`:''}
+  ${nt?`<div class="note">📝 ${esc(nt)}</div>`:''}
+  <div class="row"><button class="sec2" id="cx">Cerrar</button><button class="pri" data-e="${si}:${row}">Editar todo</button></div>`;
+  $('#sheet').classList.add('on'); $('#sheet').dataset.si=si; $('#sheet').dataset.row=row; $('#sheet').dataset.mode='order';
+}
+async function orderDate(el){
+  const si=+$('#sheet').dataset.si,row=+$('#sheet').dataset.row,D=S.data[si],it=findItem(si,row);
+  if(!el.value) return; const [y,m,d]=el.value.split('-').map(Number); const dt=new Date(y,m-1,d);
+  const col=D.cols[el.dataset.od]; const asSerial=typeof it.raw[col]==='number'||(el.dataset.od==='fenvio'&&D.dateMode==='serial');
+  try{ await setField(si,row,col,asSerial?dateToSerial(dt):dateText(dt)); toast('✓ Fecha guardada'); openOrder(si,row) }catch(e){ toast('No se pudo guardar: '+e.message,4500) }
 }
 function openEdit(si,rowNum){
   const D=S.data[si], it=findItem(si,rowNum);
@@ -946,6 +986,8 @@ document.addEventListener('click',async e=>{
   const cf=t.closest('[data-cfg]'); if(cf){ cfgToggle(cf.dataset.cfg); return }
   const mv=t.closest('[data-move]'); if(mv){ cfgMove(mv.dataset.move); return }
   const lt=t.closest('[data-late]'); if(lt){ S.late=+lt.dataset.late; ls.set('late',S.late); render({keep:true}); notifyBadge(); return }
+  const po=t.closest('[data-o]'); if(po){const [si,r]=po.dataset.o.split(':').map(Number);openOrder(si,r);return}
+  const pt=t.closest('[data-pt]'); if(pt){const [si,r,c]=pt.dataset.pt.split(':').map(Number);const it=findItem(si,r);setField(si,r,c,!ok(it,c)).then(()=>{toast('✓ Guardado');openOrder(si,r)}).catch(e=>toast('No se pudo guardar: '+e.message,4500));return}
   const tg=t.closest('[data-t]'); if(tg){const [si,r,c]=tg.dataset.t.split(':').map(Number);toggle(si,r,c);return}
   const ed=t.closest('[data-e]'); if(ed){const [si,r]=ed.dataset.e.split(':').map(Number);openEdit(si,r);return}
   if(t.id==='mic'){openVoice();return}
@@ -997,10 +1039,11 @@ document.addEventListener('visibilitychange',async()=>{
 
 document.addEventListener('change',e=>{
   const id=e.target.id;
+  if(e.target.dataset&&e.target.dataset.od){ orderDate(e.target); return }
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v14';
+const APP_V='v15';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

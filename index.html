@@ -140,6 +140,8 @@ button.alert{font-size:14px;color:var(--ink);font-family:inherit}
 #tour .tb span{font-size:12px;color:#8a7d75}
 #tour .tb button{border:0;border-radius:99px;padding:9px 16px;font-weight:700;background:var(--coral);color:#fff}
 #tour .tb button.sk{background:var(--peach-l);color:var(--coral-d)}
+.odate{font-size:14px;font-weight:800;color:var(--ink)}.odate i{font-style:normal;font-weight:600;color:var(--coral-d)}
+.perx{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0;font-size:13px}.perx input{border:1px solid var(--line);border-radius:10px;padding:7px 8px;font:inherit;max-width:150px;background:#fff}
 </style>
 </head>
 <body>
@@ -165,7 +167,7 @@ const norm = s => String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerC
 const ls = {get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};
 
 let token = null, tokenExp = 0, tokenClient = null;
-const S = {view:'home', tab:ALL, q:'', filter:'emb', data:{}, loading:false, days:+(ls.get('days')||60), limit:60, late:+(ls.get('late')||7), group:ls.get('group')!=='0', selMode:false, sel:new Set(), visible:[]};
+const S = {view:'home', tab:ALL, q:'', filter:'emb', data:{}, loading:false, per:(()=>{try{return JSON.parse(ls.get('per')||'null')}catch(e){return null}})()||{k:'n',n:+(ls.get('days')||60)||0}, limit:60, late:+(ls.get('late')||7), group:ls.get('group')!=='0', selMode:false, sel:new Set(), visible:[]};
 
 function toast(m, ms=2200){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',ms)}
 function toastAct(msg,label,fn){
@@ -266,7 +268,31 @@ async function loadAll(){
 /* ---------- Reglas ---------- */
 const ok = (it,c)=>c>=0&&(it.raw[c]===true||it.v[c]==='TRUE');
 function isCancel(it){return it.v.some(x=>/cancelad/i.test(String(x)))}
-function inWindow(it){ if(!S.days) return true; if(!it.date) return true; return (Date.now()-it.date.getTime())<=S.days*86400000 }
+function perBounds(){
+  const p=S.per||{k:'all'}, now=new Date(), d0=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime(), DAY=86400000;
+  if(p.k==='today') return [d0,Infinity];
+  if(p.k==='d3') return [d0-2*DAY,Infinity];
+  if(p.k==='week'){ const wd=(now.getDay()+6)%7; return [d0-wd*DAY,Infinity] }
+  if(p.k==='month') return [new Date(now.getFullYear(),now.getMonth(),1).getTime(),Infinity];
+  if(p.k==='n') return p.n>0?[Date.now()-p.n*DAY,Infinity]:[-Infinity,Infinity];
+  if(p.k==='custom'){ const f=p.from?new Date(p.from+'T00:00:00').getTime():-Infinity, t=p.to?new Date(p.to+'T23:59:59').getTime():Infinity; return [f,t] }
+  return [-Infinity,Infinity];
+}
+function perLabel(){
+  const p=S.per||{}; const L={today:'Hoy',d3:'Últimos 3 días',week:'Esta semana',month:'Este mes',all:'Todo'};
+  if(L[p.k]) return L[p.k]; if(p.k==='n') return p.n>0?`Últimos ${p.n} días`:'Todo';
+  const f=x=>x?x.split('-').reverse().join('/'):'…'; return `${f(p.from)} → ${f(p.to)}`;
+}
+function inWindow(it){ if(!it.date) return true; const [a,b]=perBounds(), t=it.date.getTime(); return t>=a&&t<=b }
+function perUI(){
+  const p=S.per||{}, on=(k,n)=>p.k===k&&(n===undefined||p.n===n)?'on':'';
+  const pre=[['today','Hoy'],['d3','3 días'],['week','Esta semana'],['month','Este mes'],['n:30','30 días'],['n:60','60 días'],['n:90','90 días'],['all','Todo']];
+  return `<div class="chips">${pre.map(([k,l])=>{const [kk,nn]=k.split(':');return `<button class="chip ${on(kk,nn?+nn:undefined)}" data-per="${k}">${l}</button>`}).join('')}</div>
+  <div class="perx"><label>Últimos <input type="number" min="1" id="pn" value="${p.k==='n'?p.n:''}" placeholder="N"> días</label></div>
+  <div class="perx"><label>Desde <input type="date" id="pf" value="${p.k==='custom'?p.from||'':''}"></label><label>hasta <input type="date" id="pt" value="${p.k==='custom'?p.to||'':''}"></label></div>`;
+}
+function setPer(o){ S.per=o; ls.set('per',JSON.stringify(o)); render({keep:true}); notifyBadge() }
+function ageTxt(d){ if(!d) return ''; const n=Math.floor((new Date().setHours(0,0,0,0)-new Date(d).setHours(0,0,0,0))/86400000); return n<=0?'hoy':n===1?'ayer':`hace ${n} días` }
 /* canc: dice "cancelado" · enviado: despachado · desp: embalado, falta despachar · emb: listo para embalar · prod: en producción */
 function stage(it,D){
   const c=D.cols;
@@ -464,7 +490,7 @@ function cardHTML(si,D,it){
   return `<article class="card ${cancel?'cancel':''} ${sel?'sel':''}" ${S.selMode?`data-sel="${key}"`:''}>
     ${S.selMode?`<div class="selbox">${sel?'✓':''}</div>`:''}
     ${cancel?'<div class="badge-c">CANCELADO</div>':''}
-    <div class="cmeta"><span>${g(D.cols.fecha)}</span><span><span class="src">${SHEETS[si].short}</span>fila ${it.row}</span></div>
+    <div class="cmeta"><span class="odate">📅 ${g(D.cols.fecha)||'sin fecha'}${it.date?` <i>· ${ageTxt(it.date)}</i>`:''}</span><span><span class="src">${SHEETS[si].short}</span>fila ${it.row}</span></div>
     <div class="t">${g(D.cols.diseno)||'(sin diseño)'}</div>
     <span class="tipo">${esc(t)}</span>
     <div class="cli"><span>${g(D.cols.cliente)}</span>${S.selMode?'':`<button class="edit" data-e="${si}:${it.row}">Editar</button>`}</div>
@@ -505,7 +531,7 @@ function renderHome(){
       const tt=totalTipos(sum); const tk=Object.keys(tt).sort((a,b)=>tt[b]-tt[a]);
       return tk.length?`<div class="sec">Total para embalar por tamaño y formato</div><div class="ch"><ul style="margin:0">${tk.map(k=>`<li><span>${esc(k)}</span><i>${tt[k]}</i></li>`).join('')}</ul></div>`:'';
     },
-    period:()=>`<div class="sec">Período analizado</div><div class="chips">${[[30,'30 días'],[60,'60 días'],[90,'90 días'],[0,'Todo']].map(([d,l])=>`<button class="chip ${S.days===d?'on':''}" data-days="${d}">${l}</button>`).join('')}</div>
+    period:()=>`<div class="sec">Período: ${perLabel()}</div>${perUI()}
       <div class="note">Para embalar = Imp, Prep Vin y Pegar tildados, sin Embalar ni cancelar.${S.loadedAt?` · Actualizado ${new Date(S.loadedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}`:''}</div>`
   };
   return `<div class="hello">Hoy<b>Pedidos Jake</b></div>`+CFG.order.filter(k=>!CFG.hide[k]).map(k=>parts[k]?parts[k]():'').join('');
@@ -522,7 +548,7 @@ function renderConfig(){
   <div class="setcard">${SHEETS.map((s,i)=>`<div class="cfgrow"><span>${s.label}</span>${sw(CFG.sheets[i],`data-cfg="sheet:${i}"`)}</div>`).join('')}</div>
   <div class="sec">Reglas</div>
   <div class="setcard">
-    <div class="cfgrow" style="display:block"><span>Período de pedidos que cuentan</span><div class="chips">${[[30,'30 días'],[60,'60 días'],[90,'90 días'],[0,'Todo']].map(([d,l])=>`<button class="chip ${S.days===d?'on':''}" data-days="${d}">${l}</button>`).join('')}</div></div>
+    <div class="cfgrow" style="display:block"><span>Período de pedidos que cuentan: <b>${perLabel()}</b></span>${perUI()}</div>
     <div class="cfgrow" style="display:block"><span>Un pedido está demorado después de</span><div class="chips">${[3,5,7,10,14].map(d=>`<button class="chip ${S.late===d?'on':''}" data-late="${d}">${d} días</button>`).join('')}</div></div>
     <div class="cfgrow"><span>Agrupar por tamaño en "Para embalar"</span>${sw(S.group,'data-cfg="group:1"')}</div>
     <div class="cfgrow" style="display:block"><span>Abrir la app en</span><div class="chips"><button class="chip ${CFG.start==='home'?'on':''}" data-cfg="start:home">Inicio</button><button class="chip ${CFG.start==='sheets'?'on':''}" data-cfg="start:sheets">Pedidos</button></div></div>
@@ -817,7 +843,7 @@ document.addEventListener('click',async e=>{
   const gt=t.closest('[data-go-tab]'); if(gt){S.view='sheets';S.tab=+gt.dataset.goTab;S.filter='emb';S.q='';S.limit=60;S.focusQ=false;render({top:true});return}
   const tabEl=t.closest('[data-tab]'); if(tabEl){S.tab=+tabEl.dataset.tab;S.limit=60;S.focusQ=false;render({keep:true});return}
   const fl=t.closest('[data-f]'); if(fl){S.filter=fl.dataset.f;S.limit=60;S.focusQ=false;render({keep:true});return}
-  const dy=t.closest('[data-days]'); if(dy){S.days=+dy.dataset.days;ls.set('days',S.days);render({keep:true});notifyBadge();return}
+  const pr=t.closest('[data-per]'); if(pr){ const [k,n]=pr.dataset.per.split(':'); setPer(n?{k,n:+n}:{k}); return }
   const sl=t.closest('[data-sel]'); if(sl){const k=sl.dataset.sel; S.sel.has(k)?S.sel.delete(k):S.sel.add(k); render({keep:true}); return}
   const bk=t.closest('[data-bulk]'); if(bk){bulk(bk.dataset.bulk);return}
   const tr=t.closest('[data-tour]'); if(tr){ tr.dataset.tour==='skip'?tourStop():tourShow(tourI+1); return }
@@ -860,6 +886,11 @@ document.addEventListener('visibilitychange',async()=>{
   else if(ls.get('signed')==='1'&&window.google&&google.accounts){ try{await getToken(false,true);loadAll()}catch(e){} }
 });
 
+document.addEventListener('change',e=>{
+  const id=e.target.id;
+  if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
+  if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
+});
 window.addEventListener('load',()=>{
   if(!ls.get('email')) ls.set('email','fakundo713@gmail.com');
   S.view=CFG.start||'home';

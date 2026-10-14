@@ -292,6 +292,7 @@ async function api(path, opt={}, retry=true){
 }
 function keepAlive(){ if(!token||!(window.google&&google.accounts)) return; if(tokenExp-Date.now()<10*60000) getToken(false,true).catch(()=>{}) }
 setInterval(keepAlive,60000);
+setInterval(()=>{ if(!document.hidden&&token&&S.mod==='central'&&!S.loading&&S.loadedAt&&Date.now()-S.loadedAt>60000&&!document.querySelector('.pop.on,#sheet.on,#sw2.on')) try{loadAll(true)}catch(e){} },30000);
 
 /* ---------- Fechas ---------- */
 const DIAS=['dom','lun','mar','mié','jue','vie','sáb'];
@@ -362,8 +363,9 @@ function showPopup(){
   <div class="row"><button class="sec2" id="cx">Cerrar</button>${n?'<button class="pri" data-popgo="1">Ver pedidos</button>':''}</div>`;
   $('#sheet').classList.add('on'); $('#sheet').dataset.mode='pop';
 }
-async function loadAll(){
-  S.loading=true; render();
+async function loadAll(silent){
+  if(S.loading) return;
+  S.loading=true; if(!silent||!S.loadedAt) render({keep:true});
   try{
     const ranges = SHEETS.map(s=>'ranges='+encodeURIComponent(`'${s.name}'!A1:AA`)).join('&');
     const [f,u] = await Promise.all([
@@ -374,7 +376,7 @@ async function loadAll(){
     SHEETS.forEach((_,i)=>parseSheet(i, f.valueRanges[i].values||[], u.valueRanges[i].values||[]));
     S.loadedAt=Date.now();
   }catch(e){S.err=e.message;toast(e.message,4500)}
-  S.loading=false; render(); notifyBadge(); notifyIfNeeded(); loadAct();
+  S.loading=false; render({keep:true}); notifyBadge(); notifyIfNeeded(); loadAct();
   if(CFG.popup&&!S.popShown&&S.data[0]&&!S.err){ S.popShown=1; const td=new Date().toDateString(); if(ls.get('popDay')!==td){ ls.set('popDay',td); showPopup() } }
 }
 
@@ -1510,7 +1512,7 @@ document.addEventListener('input',e=>{
 document.addEventListener('keydown',e=>{ if(e.target.id==='vtxt'&&e.key==='Enter'&&e.target.value.trim()) runCommand(e.target.value) });
 document.addEventListener('visibilitychange',async()=>{
   if(document.hidden) return;
-  if(token){ keepAlive(); if(S.loadedAt&&Date.now()-S.loadedAt>5*60000) loadAll(); }
+  if(token){ keepAlive(); if(S.mod==='central'&&(!S.loadedAt||Date.now()-S.loadedAt>20000)) loadAll(true); }
   else if(ls.get('signed')==='1'&&window.google&&google.accounts){ try{await getToken(false,true);loadMod()}catch(e){} }
 });
 
@@ -1520,7 +1522,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v27';
+const APP_V='v28';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

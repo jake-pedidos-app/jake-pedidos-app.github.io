@@ -219,7 +219,7 @@ button.fl{padding:7px 11px;font-size:12.5px}
 .orow1.st-sent,.orow1.st-pack,.orow1.st-pend,.orow1.st-canc{border-radius:14px;margin-bottom:6px;padding-left:10px;padding-right:10px;border:0}
 .legend{display:flex;gap:6px;flex-wrap:wrap;margin:0 2px 8px}.lg{font-size:11.5px;font-weight:700;border-radius:999px;padding:3px 10px;color:var(--ink)}.lg.st-sent{background:#BFE5CC}.lg.st-pack{background:#E3F3E9}.lg.st-pend{background:#FFF0D2}
 .swh2{display:flex;align-items:center;padding:0 16px;font-size:14px;font-weight:800;color:var(--ink);pointer-events:none}.swh2.mk{background:#CDEBDB}.swh2.um{background:#F9C9C2}
-.ono{font-size:12px;font-weight:700;color:var(--coral,#d9534f);margin-left:4px}.lgd{width:16px;height:16px;border-radius:50%;border:0;padding:0}.lgd.st-sent{background:#BFE5CC}.lgd.st-pack{background:#E3F3E9;box-shadow:inset 0 0 0 1px #b9d9c4}.lgd.st-pend{background:#FFF0D2;box-shadow:inset 0 0 0 1px #ecd9a8}.lgd.st-warn{background:#FFD9B8}
+.dsum{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#fff;border-radius:16px;padding:12px 14px;margin:0 0 12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}.dsum b{font-size:15px}.dsum span{font-size:13px;font-weight:700;color:var(--coral,#d9534f)}.ono{font-size:12px;font-weight:700;color:var(--coral,#d9534f);margin-left:4px}.lgd{width:16px;height:16px;border-radius:50%;border:0;padding:0}.lgd.st-sent{background:#BFE5CC}.lgd.st-pack{background:#E3F3E9;box-shadow:inset 0 0 0 1px #b9d9c4}.lgd.st-pend{background:#FFF0D2;box-shadow:inset 0 0 0 1px #ecd9a8}.lgd.st-warn{background:#FFD9B8}
 .orow1.st-warn{background:#FFD9B8;border-radius:14px;margin-bottom:6px;padding-left:10px;padding-right:10px;border:0}.lg.st-warn{background:#FFD9B8}
 </style>
 </head>
@@ -1006,7 +1006,9 @@ function renderHome(){
     },
     period:()=>`${perUI(true)}${S.loadedAt?`<div class="note" style="margin:-6px 4px 10px">Actualizado ${new Date(S.loadedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</div>`:''}`
   };
-  return `<div class="hello">Hoy<b>Pedidos Jake</b></div>`+CFG.order.filter(k=>!CFG.hide[k]).map(k=>parts[k]?parts[k]():'').join('');
+  const hl=homeList('hoy'), htot=hl.reduce((a,l)=>a+l.items.length,0);
+  const hsum=`<div class="dsum"><b>Hoy despachaste ${htot}</b><span>${hl.map(l=>`${l.items.length} ${SHEETS[l.si].short}`).join(' · ')}</span></div>`;
+  return `<div class="hello">Hoy<b>Pedidos Jake</b></div>`+hsum+CFG.order.filter(k=>!CFG.hide[k]).map(k=>parts[k]?parts[k]():'').join('');
 }
 function renderConfigProd(){
   const sw=(on,att)=>`<button class="sw2 ${on?'on':''}" ${att}></button>`;
@@ -1526,7 +1528,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v29';
+const APP_V='v30';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

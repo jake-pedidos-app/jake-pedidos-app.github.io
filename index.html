@@ -85,9 +85,9 @@ nav button b{display:block;font-size:20px;margin-bottom:2px}
 nav button.on{color:var(--coral-d)}
 #mic{position:fixed;right:16px;bottom:88px;width:60px;height:60px;border-radius:50%;background:var(--coral);color:#fff;font-size:24px;border:0;box-shadow:0 8px 20px rgba(237,107,93,.45);z-index:7}
 /* sheets y modales */
-#sheet,#voice{position:fixed;inset:0;background:rgba(58,52,49,.35);display:none;z-index:10;align-items:flex-end}
+#sheet,#voice{position:fixed;inset:0;background:rgba(58,52,49,.45);display:none;z-index:10;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}
 #sheet.on,#voice.on{display:flex}
-#sheet .p,#voice .p{background:#fff;width:100%;max-height:92vh;overflow:auto;border-radius:24px 24px 0 0;padding:18px 16px calc(22px + env(safe-area-inset-bottom))}
+#sheet .p,#voice .p{background:#fff;width:100%;max-width:440px;max-height:86vh;overflow:auto;border-radius:26px;padding:20px 18px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
 #voice .p{max-height:none}
 .f{margin:12px 0}
 .f label{display:block;font-size:12px;color:var(--mut);margin-bottom:4px;font-weight:600}
@@ -189,6 +189,12 @@ button.alert{font-size:14px;color:var(--ink);font-family:inherit}
 .orow1 .nm{flex:1;min-width:0;display:block}.orow1 .nm b{display:block;font-size:15px}.orow1 .nm em{display:block;font-style:normal;font-size:12.5px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .orow1 .src{flex:none;margin:0}
 .setrow{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:14px;font-weight:600}
+.fls{display:flex;flex-wrap:wrap;gap:5px;margin-top:8px}.fls.ro{pointer-events:none}
+.fl{border:0;border-radius:999px;padding:4px 10px;font-size:11.5px;font-weight:700;background:#F1ECE8;color:#9a8f88}.fl.on{background:#FDE0DB;color:var(--coral-d)}
+button.fl{padding:7px 11px;font-size:12.5px}
+.setbox{background:#FBF5F0;border-radius:16px;padding:10px 12px;margin-bottom:8px;touch-action:pan-y}.setbox .setrow{padding:0}.setbox .setrow b{font-size:15px}
+[data-sw]{touch-action:pan-y}
+.tg button.half{background:#FDE0DB;color:var(--coral-d)}
 </style>
 </head>
 <body>
@@ -470,6 +476,8 @@ async function setField(si,row,c,nv,fechaOverride){
   if(c===D.cols.despachar && D.cols.fenvio>=0){
     if(fechaOverride!==undefined) ch[D.cols.fenvio]=fechaOverride;
     else if(nv && !String(item.v[D.cols.fenvio]).trim()) ch[D.cols.fenvio]=D.dateMode==='serial'?hoySerial():hoyTexto();
+  } else if(c===D.cols.embalar && nv && D.cols.fenvio>=0 && ok(item,D.cols.despachar) && !String(item.v[D.cols.fenvio]).trim()){
+    ch[D.cols.fenvio]=D.dateMode==='serial'?hoySerial():hoyTexto();
   }
   const old=[...item.raw], oldv=[...item.v];
   for(const [cc,vv] of Object.entries(ch)){
@@ -603,7 +611,7 @@ function cardHTML(si,D,it){
   const age=it.date?Math.floor((new Date().setHours(0,0,0,0)-new Date(it.date).setHours(0,0,0,0))/86400000):null;
   const cls=age===null?'none':(cancel||ok(it,D.cols.despachar))?'old0':age>S.late?'red':age>=3?'amb':'grn';
   const dtxt=it.date?it.date.toLocaleDateString('es-AR',{day:'numeric',month:'short'}):'Sin fecha';
-  return `<article class="card ${cancel?'cancel':''} ${sel?'sel':''}" ${S.selMode?`data-sel="${key}"`:''}>
+  return `<article class="card ${cancel?'cancel':''} ${sel?'sel':''}" ${S.selMode?`data-sel="${key}"`:`data-sw="${key}" data-card="${key}"`}>
     ${S.selMode?`<div class="selbox">${sel?'✓':''}</div>`:''}
     ${cancel?'<div class="badge-c">CANCELADO</div>':''}
     <div class="cmeta"><span class="dpill ${cls}">📅 ${dtxt}${it.date?` · ${ageTxt(it.date)}`:''}</span>${fe}<span class="rt"><span class="src">${SHEETS[si].short}</span><small>#${it.row}</small></span></div>
@@ -612,7 +620,7 @@ function cardHTML(si,D,it){
     <span class="tipo">${esc(t)}</span>
     ${D.cols.notas>=0&&it.v[D.cols.notas]?`<div class="note">📝 ${g(D.cols.notas)}</div>`:''}
     ${D.cols.enviar>=0&&it.v[D.cols.enviar]?`<div class="note">🚚 ${g(D.cols.enviar)}</div>`:''}
-    ${tags?`<div class="tg">${tags}</div>`:''}</article>`;
+    ${S.selMode?'':`<div class="fls ro">${flagLine(si,it.row,null)}</div>`}</article>`;
 }
 
 const HTITLE={emb:'Para embalar',desp:'Embalados, sin despachar',prod:'En producción',late:'Demorados',nopago:'Sin pago',canc:'Cancelados',hoy:'Despachados hoy'};
@@ -632,6 +640,38 @@ function homeList(fk){
   });
 }
 function tipos1(it,D){ return tipos(it,D) }
+let SETS={}; try{ SETS=JSON.parse(ls.get('sets')||'{}') }catch(e){}
+function setsSave(){ ls.set('sets',JSON.stringify(SETS)) }
+const skey=(si,row,i)=>si+':'+row+':'+i;
+function eff(si,row,i,fk){ const D=S.data[si], it=findItem(si,row), o=SETS[skey(si,row,i)]; if(o&&o[fk]!==undefined) return o[fk]; return ok(it,D.cols[fk]) }
+function nSets(si,row){ return setsOf(findItem(si,row),S.data[si]).length }
+async function applySheetFlag(si,row,fk,v){
+  const D=S.data[si], it=findItem(si,row); if(D.cols[fk]<0) return;
+  if(ok(it,D.cols[fk])!==v) await setField(si,row,D.cols[fk],v);
+}
+/* marca/desmarca un set; la planilla se tilda solo cuando TODOS los sets lo tienen */
+async function toggleSet(si,row,i,fk,forceVal){
+  const n=nSets(si,row), cur=eff(si,row,i,fk), v=forceVal===undefined?!cur:forceVal;
+  if(n<=1){ await applySheetFlag(si,row,fk,v); return }
+  const k=skey(si,row,i); SETS[k]=SETS[k]||{}; SETS[k][fk]=v;
+  const all=[...Array(n).keys()].map(j=>eff(si,row,j,fk));
+  const allT=all.every(x=>x), allF=all.every(x=>!x);
+  if(allT||allF){ for(let j=0;j<n;j++){ const o=SETS[skey(si,row,j)]; if(o){ delete o[fk]; if(!Object.keys(o).length) delete SETS[skey(si,row,j)] } } }
+  setsSave();
+  await applySheetFlag(si,row,fk,allT);
+}
+async function setOrderFlag(si,row,fk,v){
+  const n=nSets(si,row);
+  for(let j=0;j<n;j++){ const o=SETS[skey(si,row,j)]; if(o){ delete o[fk]; if(!Object.keys(o).length) delete SETS[skey(si,row,j)] } }
+  setsSave(); await applySheetFlag(si,row,fk,v);
+}
+function orderFlagState(si,row,fk){ // 'all' | 'some' | 'none'
+  const n=nSets(si,row), a=[...Array(n).keys()].map(j=>eff(si,row,j,fk)); return a.every(x=>x)?'all':a.some(x=>x)?'some':'none';
+}
+function flagLine(si,row,i){
+  const D=S.data[si];
+  return FLAGS.filter(f=>D.cols[f.key]>=0).map(f=>{const o=i==null?orderFlagState(si,row,f.key)==='all':eff(si,row,i,f.key); return `<span class="fl ${o?'on':''}">${o?'✓ ':''}${f.label}</span>`}).join('');
+}
 function setsOf(it,D){
   const tp=tipos(it,D);
   const ds=String((D.cols.diseno>=0?it.v[D.cols.diseno]:'')||'').split(/\r?\n/).map(x=>x.trim()).filter(Boolean);
@@ -661,15 +701,15 @@ function renderHome(){
       return `<div class="sec">${HTITLE[fk]} por planilla</div>`+L.map(l=>{
         const D=S.data[l.si];
         return `<div class="ch"><div class="r"><b>${SHEETS[l.si].label}</b><span class="n">${l.items.length}</span></div>`+
-          (l.items.length?`<div class="olist">${[...l.items].sort((a,b)=>{const ta=tipo(a,D),tb=tipo(b,D);return ta<tb?-1:ta>tb?1:((a.date?+a.date:0)-(b.date?+b.date:0))}).map(it=>`<button class="orow1" data-o="${l.si}:${it.row}"><span class="tp">${esc(tipo(it,D))}</span><span class="nm"><b>${esc(it.v[D.cols.cliente]||'(sin nombre)')}</b><em>${esc(setsOf(it,D).map(x=>x.design).join(' + '))}</em></span><small>${FDATE(it.date)}</small><i>›</i></button>`).join('')}</div>`:'<div class="note">Nada en esta lista</div>')+
+          (l.items.length?`<div class="olist">${[...l.items].sort((a,b)=>{const ta=tipo(a,D),tb=tipo(b,D);return ta<tb?-1:ta>tb?1:((a.date?+a.date:0)-(b.date?+b.date:0))}).map(it=>`<button class="orow1" data-sw="${l.si}:${it.row}" data-o="${l.si}:${it.row}"><span class="tp">${esc(tipo(it,D))}</span><span class="nm"><b>${esc(it.v[D.cols.cliente]||'(sin nombre)')}</b><em>${esc(setsOf(it,D).map(x=>x.design).join(' + '))}</em><span class="fls ro">${flagLine(l.si,it.row,null)}</span></span><small>${FDATE(it.date)}</small><i>›</i></button>`).join('')}</div>`:'<div class="note">Nada en esta lista</div>')+
           `</div>`;
       }).join('');
     },
     totals:()=>{
       const fk=S.hf||'emb', g={};
-      homeList(fk).forEach(l=>{ const D=S.data[l.si]; l.items.forEach(it=>setsOf(it,D).forEach(x=>{ (g[x.tipo]=g[x.tipo]||[]).push({si:l.si,it,design:x.design,D}) })) });
+      homeList(fk).forEach(l=>{ const D=S.data[l.si]; l.items.forEach(it=>setsOf(it,D).forEach(x=>{ (g[x.tipo]=g[x.tipo]||[]).push({si:l.si,it,design:x.design,D,i:setsOf(it,D).indexOf(x)}) })) });
       const keys=Object.keys(g).sort((a,b)=>g[b].length-g[a].length); if(!keys.length) return '';
-      return `<div class="sec">Total ${HTITLE[fk].toLowerCase()} por tamaño y formato</div>`+keys.map(k=>`<div class="ch"><div class="th"><span>${esc(k)}</span><i>${g[k].length}</i></div><div class="olist">${g[k].map(x=>`<button class="orow1" data-o="${x.si}:${x.it.row}"><span class="nm"><b>${esc(x.it.v[x.D.cols.cliente]||'(sin nombre)')}</b><em>${esc(x.design)}</em></span><span class="src">${SHEETS[x.si].short}</span><small>${FDATE(x.it.date)}</small><i>›</i></button>`).join('')}</div></div>`).join('');
+      return `<div class="sec">Total ${HTITLE[fk].toLowerCase()} por tamaño y formato</div>`+keys.map(k=>`<div class="ch"><div class="th"><span>${esc(k)}</span><i>${g[k].length}</i></div><div class="olist">${g[k].map(x=>`<button class="orow1" data-sw="${x.si}:${x.it.row}:${x.i}" data-o="${x.si}:${x.it.row}"><span class="nm"><b>${esc(x.it.v[x.D.cols.cliente]||'(sin nombre)')}</b><em>${esc(x.design)}</em><span class="fls ro">${flagLine(x.si,x.it.row,x.i)}</span></span><span class="src">${SHEETS[x.si].short}</span><small>${FDATE(x.it.date)}</small><i>›</i></button>`).join('')}</div></div>`).join('');
     },
     period:()=>`${perUI()}
       <div class="note">Para embalar = Imp, Prep Vin y Pegar tildados, sin Embalar ni cancelar.${S.loadedAt?` · Actualizado ${new Date(S.loadedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}`:''}</div>`
@@ -783,19 +823,35 @@ function renderLogin(){
 }
 function openOrder(si,row){
   const D=S.data[si], it=findItem(si,row); if(!it) return;
-  const tg=FLAGS.filter(f=>D.cols[f.key]>=0).map(f=>{const o=ok(it,D.cols[f.key]);return `<button class="${o?'on':''}" data-pt="${si}:${row}:${D.cols[f.key]}">${o?'✓ ':''}${f.label}</button>`}).join('');
+  const sets=setsOf(it,D), multi=sets.length>1;
+  const grp=FLAGS.filter(f=>D.cols[f.key]>=0).map(f=>{const st=orderFlagState(si,row,f.key);return `<button class="${st==='all'?'on':st==='some'?'half':''}" data-pt="${si}:${row}:${f.key}">${st==='all'?'✓ ':st==='some'?'◐ ':''}${f.label}</button>`}).join('');
   const dv=d=>d?`${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`:'';
   const fe=D.cols.fenvio>=0?parseFecha(it.v[D.cols.fenvio],it.raw[D.cols.fenvio]):null;
   const nt=D.cols.notas>=0?it.v[D.cols.notas]:'';
-  $('#sp').innerHTML=`<div class="ohead"><div><div class="ow">${esc(it.v[D.cols.cliente]||'(sin nombre)')}</div><div class="od">${esc(it.v[D.cols.diseno]||'(sin diseño)')}</div></div><span class="src">${SHEETS[si].short} #${row}</span></div>
-  <div class="sets">${setsOf(it,D).map((x,i)=>`<div class="setrow"><span class="tipo">${esc(x.tipo)}</span><span>${esc(x.design)}</span></div>`).join('')}</div>
-  <div class="tg" style="margin-top:14px">${tg}</div>
+  $('#sp').innerHTML=`<div class="ohead"><div><div class="ow">${esc(it.v[D.cols.cliente]||'(sin nombre)')}</div></div><span class="src">${SHEETS[si].short} #${row}</span></div>
+  ${multi?`<div class="popsec" style="margin-top:4px">Sets del pedido · deslizá un set → marcar, ← desmarcar</div>`:''}
+  <div class="sets">${sets.map((x,k)=>`<div class="setbox" data-sw="${si}:${row}:${k}"><div class="setrow"><span class="tipo">${esc(x.tipo)}</span><b>${esc(x.design)}</b></div>${multi?`<div class="fls">${FLAGS.filter(f=>D.cols[f.key]>=0).map(f=>{const o=eff(si,row,k,f.key);return `<button class="fl ${o?'on':''}" data-ps="${si}:${row}:${k}:${f.key}">${o?'✓ ':''}${f.label}</button>`}).join('')}</div>`:''}</div>`).join('')}</div>
+  <div class="popsec">${multi?'Pedido completo (todos los sets)':'Estado'}</div>
+  <div class="tg">${grp}</div>
   ${D.cols.fecha>=0?`<div class="f"><label>📅 Fecha del pedido ${it.date?'· '+ageTxt(it.date):''}</label><input type="date" data-od="fecha" value="${dv(it.date)}"></div>`:''}
-  ${D.cols.fenvio>=0?`<div class="f"><label>📦 Fecha de envío</label><input type="date" data-od="fenvio" value="${dv(fe)}"></div>`:''}
+  ${D.cols.fenvio>=0?`<div class="f"><label>📦 Fecha de envío (se carga sola al despachar)</label><input type="date" data-od="fenvio" value="${dv(fe)}"></div>`:''}
   ${D.cols.enviar>=0&&it.v[D.cols.enviar]?`<div class="note">🚚 ${esc(it.v[D.cols.enviar])}</div>`:''}
   ${nt?`<div class="note">📝 ${esc(nt)}</div>`:''}
   <div class="row"><button class="sec2" id="cx">Cerrar</button><button class="sec2" data-gopedido="${si}:${row}">Ver en Pedidos</button><button class="pri" data-e="${si}:${row}">Editar todo</button></div>`;
   $('#sheet').classList.add('on'); $('#sheet').dataset.si=si; $('#sheet').dataset.row=row; $('#sheet').dataset.mode='order';
+}
+function openSwipe(si,row,i,mode){
+  const D=S.data[si], it=findItem(si,row); if(!it) return;
+  const multiSet=i!=null&&nSets(si,row)>1;
+  const st=f=> multiSet?eff(si,row,i,f.key):orderFlagState(si,row,f.key)==='all';
+  const list=FLAGS.filter(f=>D.cols[f.key]>=0).filter(f=>mode==='mark'?!st(f):st(f));
+  if(!list.length){ $('#sheet').classList.remove('on'); toast(mode==='mark'?'Ya está todo marcado':'No hay nada marcado'); return }
+  const sub=multiSet?setsOf(it,D)[i].design:(nSets(si,row)>1?'Todos los sets':'');
+  $('#sp').innerHTML=`<div class="ohead"><div><div class="ow">${esc(it.v[D.cols.cliente]||'(sin nombre)')}</div><div class="od">${esc(sub)}</div></div><span class="src">${SHEETS[si].short} #${row}</span></div>
+  <div class="popsec" style="margin-top:2px">${mode==='mark'?'➜ Marcar':'⬅ Desmarcar'}</div>
+  <div class="tg">${list.map(f=>`<button class="${mode==='mark'?'on':''}" data-sact="${si}:${row}:${multiSet?i:''}:${f.key}:${mode}">${f.label}</button>`).join('')}</div>
+  <div class="row"><button class="sec2" id="cx">Cerrar</button><button class="pri" data-o="${si}:${row}">Ver detalle</button></div>`;
+  $('#sheet').classList.add('on'); $('#sheet').dataset.mode='swipe'; $('#sheet').dataset.si=si; $('#sheet').dataset.row=row; $('#sheet').dataset.i=i==null?'':i; $('#sheet').dataset.sm=mode;
 }
 async function orderDate(el){
   const si=+$('#sheet').dataset.si,row=+$('#sheet').dataset.row,D=S.data[si],it=findItem(si,row);
@@ -1043,6 +1099,15 @@ function installHelp(){
 }
 
 /* ---------- Eventos ---------- */
+(function(){
+  let sx=0,sy=0,el=null,dx=0,mv=false;
+  document.addEventListener('touchstart',e=>{ el=e.target.closest&&e.target.closest('[data-sw]'); if(!el||e.touches.length>1){el=null;return} sx=e.touches[0].clientX; sy=e.touches[0].clientY; dx=0; mv=false },{passive:true});
+  document.addEventListener('touchmove',e=>{ if(!el) return; dx=e.touches[0].clientX-sx; const dy=e.touches[0].clientY-sy;
+    if(!mv&&Math.abs(dx)>12&&Math.abs(dx)>Math.abs(dy)*1.5) mv=true;
+    if(mv){ el.style.transition='none'; el.style.transform='translateX('+Math.max(-90,Math.min(90,dx*.5))+'px)'; el.style.background=dx>0?'#E6F4EC':'#FDE3DF' } },{passive:true});
+  document.addEventListener('touchend',()=>{ if(!el) return; const e2=el; el=null; e2.style.transition='transform .2s,background .2s'; e2.style.transform=''; e2.style.background='';
+    if(mv&&Math.abs(dx)>70){ S.swAt=Date.now(); const [si,r,i]=e2.dataset.sw.split(':'); openSwipe(+si,+r,i===undefined?null:+i,dx>0?'mark':'unmark') } });
+})();
 document.addEventListener('click',async e=>{
   const t=e.target;
   const v=t.closest('[data-view]'); if(v){S.view=v.dataset.view;S.focusQ=false;render({top:true});return}
@@ -1062,9 +1127,13 @@ document.addEventListener('click',async e=>{
   const lt=t.closest('[data-late]'); if(lt){ S.late=+lt.dataset.late; ls.set('late',S.late); render({keep:true}); notifyBadge(); return }
   const gp=t.closest('[data-gopedido]'); if(gp){ const [si,r]=gp.dataset.gopedido.split(':').map(Number); const it=findItem(si,r); $('#sheet').classList.remove('on'); S.view='sheets';S.tab=si;S.filter='todos';S.q=String(it.v[S.data[si].cols.cliente]||'');S.limit=60;S.focusQ=false;render({top:true});return }
   const po=t.closest('[data-o]'); if(po){const [si,r]=po.dataset.o.split(':').map(Number);openOrder(si,r);return}
-  const pt=t.closest('[data-pt]'); if(pt){const [si,r,c]=pt.dataset.pt.split(':').map(Number);const it=findItem(si,r);setField(si,r,c,!ok(it,c)).then(()=>{toast('✓ Guardado');openOrder(si,r)}).catch(e=>toast('No se pudo guardar: '+e.message,4500));return}
+  const sa=t.closest('[data-sact]'); if(sa){ const [si,r,i,fk,mode]=sa.dataset.sact.split(':'); const v=mode==='mark';
+    try{ if(i!=='') await toggleSet(+si,+r,+i,fk,v); else await setOrderFlag(+si,+r,fk,v); toast('✓ Guardado'); render({keep:true}); openSwipe(+si,+r,i===''?null:+i,mode) }catch(er){ toast('No se pudo guardar: '+er.message,4500) } return }
+  const ps=t.closest('[data-ps]'); if(ps){ const [si,r,i,fk]=ps.dataset.ps.split(':'); try{ await toggleSet(+si,+r,+i,fk); render({keep:true}); openOrder(+si,+r) }catch(er){ toast('No se pudo guardar: '+er.message,4500) } return }
+  const pt=t.closest('[data-pt]'); if(pt){ const [si,r,fk]=pt.dataset.pt.split(':'); const st=orderFlagState(+si,+r,fk); try{ await setOrderFlag(+si,+r,fk,st!=='all'); toast('✓ Guardado'); render({keep:true}); openOrder(+si,+r) }catch(er){ toast('No se pudo guardar: '+er.message,4500) } return }
   const tg=t.closest('[data-t]'); if(tg){const [si,r,c]=tg.dataset.t.split(':').map(Number);toggle(si,r,c);return}
   const ed=t.closest('[data-e]'); if(ed){const [si,r]=ed.dataset.e.split(':').map(Number);openEdit(si,r);return}
+  const cd=t.closest('[data-card]'); if(cd&&!t.closest('button')&&Date.now()-(S.swAt||0)>450){ const [si,r]=cd.dataset.card.split(':').map(Number); openOrder(si,r); return }
   if(t.id==='mic'){openVoice();return}
   if(t.id==='vhab'){startListen(false);return}
   if(t.id==='vcl'||t.id==='voice'){$('#voice').classList.remove('on');return}
@@ -1120,7 +1189,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v20';
+const APP_V='v21';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

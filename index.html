@@ -170,6 +170,8 @@ button.alert{font-size:14px;color:var(--ink);font-family:inherit}
 .tgrp{margin:10px 0 4px}.th{display:flex;justify-content:space-between;align-items:center;font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--coral-d);background:var(--peach-l);border-radius:10px;padding:6px 10px}.th i{font-style:normal}
 .orow{display:flex;justify-content:space-between;align-items:center;gap:8px;padding:9px 2px;border-bottom:1px solid var(--line)}.orow:last-child{border:0}
 .orow b{display:block;font-size:15px}.orow span{display:block;font-size:13px;color:var(--mut)}.orow small{font-size:11px;color:#b5aaa3;white-space:nowrap;text-align:right}
+.csearch{width:100%;box-sizing:border-box;border:0;background:#fff;border-radius:16px;padding:13px 16px;font:inherit;margin:0 0 12px;box-shadow:0 2px 10px rgba(58,52,49,.07)}
+.wand{font-size:20px}
 </style>
 </head>
 <body>
@@ -595,6 +597,7 @@ function renderConfig(){
   const sw=(on,att)=>`<button class="sw2 ${on?'on':''}" ${att}></button>`;
   const notif=!window.Notification?'No disponible en este navegador':Notification.permission==='granted'?'Activados ✓':Notification.permission==='denied'?'Bloqueados (activalos en los ajustes del sitio)':'Desactivados';
   return `<div class="hello">Ajustes<b>Configuración</b></div>
+  <input id="cs" class="csearch" type="search" placeholder="🔍 Buscar un ajuste…" autocomplete="off">
   <div class="sec">Pantalla de inicio · orden y visibilidad</div>
   <div class="setcard">${CFG.order.map(k=>`<div class="cfgrow"><span>${SECLBL[k]}</span><span class="ctl"><button class="mv" data-move="${k}:-1">↑</button><button class="mv" data-move="${k}:1">↓</button>${sw(!CFG.hide[k],`data-cfg="sec:${k}"`)}</span></div>`).join('')}</div>
   <div class="sec">Tarjetas de resumen</div>
@@ -669,6 +672,7 @@ function render(opt={}){
   if(S.view!=='sheets') S.selMode=false;
   $('#app').innerHTML=`<header><div class="top">
       <button class="brand" data-view="home" aria-label="Inicio"><img src="jk-192.png" alt="Jake"><b>Jake Central</b></button>
+      <button class="ibtn wand" data-act="tour" title="Guía paso a paso" aria-label="Guía paso a paso" style="margin-left:auto">🪄</button>
       </div>
     </header>
     ${home?`<div id="home">${renderHome()}</div>`:S.view==='config'?`<div id="home">${renderConfig()}</div>`:renderSheets()}
@@ -969,7 +973,19 @@ document.addEventListener('click',async e=>{
   if(t.id==='go'){try{await getToken(true);loadAll()}catch(err){toast('Login: '+err.message,4000)}return}
   if(t.id==='scid'){const v2=$('#cid').value.trim();if(v2){ls.set('cid',v2);tokenClient=null;render()}return}
 });
+function cfgFilter(q){
+  q=norm(q.trim());
+  const root=document.getElementById('home'); if(!root) return;
+  [...root.querySelectorAll('.setcard')].forEach(card=>{
+    const sec=card.previousElementSibling&&card.previousElementSibling.classList.contains('sec')?card.previousElementSibling:null;
+    const secMatch=sec&&q&&norm(sec.textContent).includes(q);
+    let any=false;
+    card.querySelectorAll('.cfgrow').forEach(r=>{ const m=!q||secMatch||norm(r.textContent).includes(q); r.style.display=m?'':'none'; if(m) any=true });
+    card.style.display=any?'':'none'; if(sec) sec.style.display=any?'':'none';
+  });
+}
 document.addEventListener('input',e=>{
+  if(e.target.id==='cs'){ cfgFilter(e.target.value); return }
   if(e.target.id==='q'){S.q=e.target.value;S.focusQ=true;S.limit=60;clearTimeout(S.dt);S.dt=setTimeout(()=>render({keep:true}),200)}
 });
 document.addEventListener('keydown',e=>{ if(e.target.id==='vtxt'&&e.key==='Enter'&&e.target.value.trim()) runCommand(e.target.value) });
@@ -984,7 +1000,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v13';
+const APP_V='v14';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

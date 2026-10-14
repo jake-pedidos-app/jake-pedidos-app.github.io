@@ -1156,7 +1156,7 @@ function openBell(){
     $('#sheet').classList.add('on'); $('#sheet').dataset.mode='pop'; return;
   }
   const s=summarize(), ig=SHEETS.reduce((a,_,i)=>a+((S.data[i]&&S.data[i].ignored||[]).length),0);
-  const row=(k,t)=>`<button class="orow1" data-hf="${k}" style="width:100%"><span class="nm"><b>${t}</b></span><i>›</i></button>`;
+  const row=(k,t)=>`<button class="orow1" data-bellgo="${k}" style="width:100%"><span class="nm"><b>${t}</b></span><i>›</i></button>`;
   $('#sp').innerHTML=`<div class="pophd">🔔 Alertas</div>`+
    (s.late?row('late',`⏰ ${s.late} pedido(s) llevan más de ${S.late} días sin despachar`):'')+
    (s.sinPago?row('nopago',`💳 ${s.sinPago} pedido(s) sin pago confirmado`):'')+
@@ -1518,6 +1518,7 @@ document.addEventListener('click',async e=>{
   if(S.lpAt&&Date.now()-S.lpAt<900){ S.lpAt=0; e.preventDefault(); return }
   const lg=t.closest('[data-lg]'); if(lg){ toast(lg.dataset.lg); return }
   if(t.closest('#bell')){ openBell(); return }
+  const bg=t.closest('[data-bellgo]'); if(bg){ $('#sheet').classList.remove('on'); S.view='sheets';S.tab=ALL;S.filter=bg.dataset.bellgo;S.q='';S.limit=60;S.focusQ=false;render({top:true});return }
   if(t.closest('#sheet [data-sk]')) $('#sheet').classList.remove('on');
   const hy=t.closest('[data-hoy]'); if(hy){ openHoy(hy.dataset.hoy); return }
   const bi=t.closest('[data-bulkign]'); if(bi){ const ks=[...S.sel]; const done=ignorar(ks); S.sel.clear(); S.selMode=false; render({keep:true}); notifyBadge(); if(done.length) toastAct(`🚫 ${done.length} pedido(s) ignorados`,'Deshacer',()=>{ designorar(done); render({keep:true}); notifyBadge() }); return }
@@ -1624,7 +1625,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v35';
+const APP_V='v36';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

@@ -219,6 +219,7 @@ button.fl{padding:7px 11px;font-size:12.5px}
 .orow1.st-sent,.orow1.st-pack,.orow1.st-pend,.orow1.st-canc{border-radius:14px;margin-bottom:6px;padding-left:10px;padding-right:10px;border:0}
 .legend{display:flex;gap:6px;flex-wrap:wrap;margin:0 2px 8px}.lg{font-size:11.5px;font-weight:700;border-radius:999px;padding:3px 10px;color:var(--ink)}.lg.st-sent{background:#BFE5CC}.lg.st-pack{background:#E3F3E9}.lg.st-pend{background:#FFF0D2}
 .swh2{display:flex;align-items:center;padding:0 16px;font-size:14px;font-weight:800;color:var(--ink);pointer-events:none}.swh2.mk{background:#CDEBDB}.swh2.um{background:#F9C9C2}
+.orow1.st-warn{background:#FFD9B8;border-radius:14px;margin-bottom:6px;padding-left:10px;padding-right:10px;border:0}.lg.st-warn{background:#FFD9B8}
 </style>
 </head>
 <body>
@@ -372,7 +373,7 @@ async function loadAll(){
     SHEETS.forEach((_,i)=>parseSheet(i, f.valueRanges[i].values||[], u.valueRanges[i].values||[]));
     S.loadedAt=Date.now();
   }catch(e){S.err=e.message;toast(e.message,4500)}
-  S.loading=false; render(); notifyBadge(); notifyIfNeeded();
+  S.loading=false; render(); notifyBadge(); notifyIfNeeded(); loadAct();
   if(CFG.popup&&!S.popShown&&S.data[0]&&!S.err){ S.popShown=1; const td=new Date().toDateString(); if(ls.get('popDay')!==td){ ls.set('popDay',td); showPopup() } }
 }
 
@@ -497,10 +498,39 @@ async function writeCells(si, item, changes){
   }
 }
 function findItem(si,row){return S.data[si].items.find(x=>x.row===row)}
+let ACT={today:{},ready:false};
+const myEmail=()=>(ls.get('myemail')||'').trim().toLowerCase();
+function ddmmyyyy(d){ return pad(d.getDate())+'/'+pad(d.getMonth()+1)+'/'+d.getFullYear() }
+function ensureLogTab(){ return ACT.p||(ACT.p=ensureLogTab0().catch(e=>{ACT.p=null;throw e})) }
+async function ensureLogTab0(){
+  if(ACT.ready) return true;
+  const meta=await api('?fields=sheets.properties.title',{base:STOCK_API});
+  if(!meta.sheets.some(x=>x.properties.title==='Actividad')){
+    await api(':batchUpdate',{method:'POST',base:STOCK_API,body:JSON.stringify({requests:[{addSheet:{properties:{title:'Actividad'}}}]})});
+    await api('/values/'+encodeURIComponent("'Actividad'!A1:H1")+'?valueInputOption=USER_ENTERED',{method:'PUT',base:STOCK_API,body:JSON.stringify({values:[['Fecha','Hora','Usuario','Planilla #','Planilla','Fila','Cliente','Acción']]})});
+  }
+  ACT.ready=true; return true;
+}
+async function logAct(si,row,accion){
+  try{
+    await ensureLogTab();
+    const it=findItem(si,row), D=S.data[si], d=new Date();
+    await api('/values/'+encodeURIComponent("'Actividad'!A:H")+':append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS',{method:'POST',base:STOCK_API,body:JSON.stringify({values:[[ddmmyyyy(d),pad(d.getHours())+':'+pad(d.getMinutes()),myEmail()||'(sin mail)',si,SHEETS[si].short,row,it&&D.cols.cliente>=0?it.v[D.cols.cliente]:'',accion]]})});
+  }catch(e){}
+}
+async function loadAct(){
+  try{
+    await ensureLogTab();
+    const r=await api('/values/'+encodeURIComponent("'Actividad'!A2:H6000")+'?valueRenderOption=FORMATTED_VALUE',{base:STOCK_API});
+    const td=ddmmyyyy(new Date()), m={};
+    for(const v of (r.values||[]).reverse()){ if(v[0]!==td) break; const k=v[3]+':'+v[5]; if(!m[k]) m[k]={t:v[1],u:v[2],a:v[7]} }
+    ACT.today=m; render({keep:true});
+  }catch(e){}
+}
 function touchLoad(){ let o={}; try{ o=JSON.parse(ls.get('touch')||'{}') }catch(e){} const d=new Date().toDateString(); if(o.day!==d) o={day:d,k:{}}; return o }
-function logTouch(si,row){ const o=touchLoad(); o.k[si+':'+row]=Date.now(); ls.set('touch',JSON.stringify(o)) }
+function logTouch(si,row,accion){ const o=touchLoad(); o.k[si+':'+row]=Date.now(); ls.set('touch',JSON.stringify(o)); logAct(si,row,accion||'') }
 async function setField(si,row,c,nv,fechaOverride){
-  logTouch(si,row);
+  logTouch(si,row,(S.data[si].head[c]||'col '+c)+': '+(typeof nv==='boolean'?(nv?'✓':'✗'):nv));
   const D=S.data[si]; const item=findItem(si,row);
   const ch={[c]:nv};
   if(c===D.cols.despachar && D.cols.fenvio>=0){
@@ -538,9 +568,9 @@ async function loadStock(){
   try{
     const meta=await api('?fields=sheets.properties.title',{base:STOCK_API});
     S.stock.title=meta.sheets[0].properties.title;
-    const r=await api('/values/'+encodeURIComponent("'"+S.stock.title+"'!A1:H600")+'?valueRenderOption=UNFORMATTED_VALUE',{base:STOCK_API});
+    const r=await api('/values/'+encodeURIComponent("'"+S.stock.title+"'!A1:I1500")+'?valueRenderOption=UNFORMATTED_VALUE',{base:STOCK_API});
     const rows=r.values||[];
-    S.stock.items=rows.slice(1).map((v,i)=>({row:i+2,code:String(v[0]||''),cat:String(v[1]||''),prod:String(v[2]||''),sub:String(v[3]||''),stock:stkNote(v[4]),pp:(v[5]===undefined||v[5]==='')?null:+v[5],aviso:String(v[6]||'NO').toUpperCase()==='SI',upd:String(v[7]||'')})).filter(x=>x.code);
+    S.stock.items=rows.slice(1).map((v,i)=>({row:i+2,code:String(v[0]||''),cat:String(v[1]||''),prod:String(v[2]||''),sub:String(v[3]||''),stock:stkNote(v[4]),pp:(v[5]===undefined||v[5]==='')?null:+v[5],aviso:String(v[6]||'NO').toUpperCase()==='SI',upd:String(v[7]||''),avisar:String(v[8]||'')})).filter(x=>x.code);
     S.stock.loaded=true; S.stock.err=null;
   }catch(e){ S.stock.err=e.message; toast(e.message,4500) }
   S.stock.loading=false; render({keep:true}); stockNotify();
@@ -548,12 +578,12 @@ async function loadStock(){
 function stkLow(it){ return it.pp!==null&&!isNaN(it.pp)&&it.stock<=it.pp }
 async function stockWrite(it,ch){
   const t=S.stock.title, d=[];
-  const colOf={stock:'E',pp:'F',aviso:'G'};
-  const old={stock:it.stock,pp:it.pp,aviso:it.aviso,upd:it.upd};
+  const colOf={stock:'E',pp:'F',aviso:'G',avisar:'I'};
+  const old={stock:it.stock,pp:it.pp,aviso:it.aviso,upd:it.upd,avisar:it.avisar};
   Object.assign(it,ch); it.upd=hoyTexto();
   render({keep:true});
   try{
-    for(const k of Object.keys(ch)){ d.push({range:`'${t}'!${colOf[k]}${it.row}`,values:[[k==='aviso'?(it.aviso?'SI':'NO'):(it[k]===null?'':it[k])]]}) }
+    for(const k of Object.keys(ch)){ d.push({range:`'${t}'!${colOf[k]}${it.row}`,values:[[k==='aviso'?(it.aviso?'SI':'NO'):(it[k]===null||it[k]===undefined?'':it[k])]]}) }
     d.push({range:`'${t}'!H${it.row}`,values:[[it.upd]]});
     await api('/values:batchUpdate',{method:'POST',base:STOCK_API,body:JSON.stringify({valueInputOption:'USER_ENTERED',data:d})});
   }catch(e){ Object.assign(it,old); render({keep:true}); throw e }
@@ -569,7 +599,7 @@ async function stockNotify(force){
   try{
     if(!CFG.notif||!window.Notification||Notification.permission!=='granted') return;
     const td=new Date().toDateString(); if(ls.get('stkNotifDay')===td&&!force) return;
-    const low=S.stock.items.filter(x=>x.aviso&&stkLow(x)); if(!low.length) return;
+    const me=myEmail(); const low=S.stock.items.filter(x=>x.aviso&&stkLow(x)&&(!x.avisar.trim()||(me&&x.avisar.toLowerCase().includes(me)))); if(!low.length) return;
     const reg=await navigator.serviceWorker.ready;
     reg.showNotification(`Punto de pedido: ${low.length} producto(s) para reponer`,{body:low.slice(0,4).map(x=>x.prod+' ('+x.stock+')').join(' · '),icon:'jk-192.png',badge:'jk-192.png'});
     ls.set('stkNotifDay',td);
@@ -591,7 +621,7 @@ function renderStock(){
   const list=stkSorted(), withS=list.filter(x=>x.stock>0).length;
   return `<div class="bar" style="padding-top:12px"><input id="sq" type="search" placeholder="🔍 Buscar producto, código o categoría…" value="${esc(S.stock.q)}" autocomplete="off">
     <div class="chips" id="schips">${STKCATS().map(c=>`<button class="chip ${S.stock.cat===c?'on':''}" data-scat="${esc(c)}">${esc(c)}</button>`).join('')}</div></div>
-    <div id="list"><div class="note" style="margin:0 2px 8px">${list.length} productos · ${withS} con stock · deslizá → sumar, ← restar o eliminar</div>
+    <div id="list"><div style="margin:0 2px 10px"><button class="chip on" data-act="addprod">＋ Agregar producto o insumo</button></div><div class="note" style="margin:0 2px 8px">${list.length} productos · ${withS} con stock · deslizá → sumar, ← restar o eliminar</div>
     ${list.map(stkRow).join('')||'<div class="empty">Nada para mostrar.</div>'}</div>`;
 }
 function renderPStart(){
@@ -624,12 +654,34 @@ function stockSwipe(row,mode){
   <div class="row"><button class="pri" id="sw2x">Cancelar</button></div>`;
   $('#sw2').classList.add('on');
 }
+function openAddProd(){
+  const cats=[...new Set(S.stock.items.map(x=>x.cat))];
+  $('#sp').innerHTML=`<div class="ow" style="margin-bottom:8px">Agregar producto o insumo</div>
+  <div class="f"><label>Nombre *</label><input type="text" id="ap_n" placeholder="ej: Sintex 5 mm"></div>
+  <div class="f"><label>Categoría * (elegí una o escribí una nueva, ej: Insumos)</label><input type="text" id="ap_c" list="ap_cl" value="Insumos"><datalist id="ap_cl">${cats.map(c=>`<option value="${esc(c)}">`).join('')}</datalist></div>
+  <div class="f"><label>Código (opcional, si no lo ponés se genera)</label><input type="text" id="ap_k"></div>
+  <div class="f"><label>Detalle (opcional: medida, color, proveedor…)</label><input type="text" id="ap_d"></div>
+  <div class="f"><label>Stock inicial</label><input type="number" id="ap_s" value="0" min="0"></div>
+  <div class="f"><label>Punto de pedido (opcional)</label><input type="number" id="ap_p" min="0"></div>
+  <div class="row"><button class="sec2" id="cx">Cancelar</button><button class="pri" id="ap_ok">Agregar</button></div>`;
+  $('#sheet').classList.add('on'); $('#sheet').dataset.mode='add';
+}
+async function saveAddProd(){
+  const n=($('#ap_n').value||'').trim(), c=($('#ap_c').value||'').trim(); if(!n||!c){ toast('Falta el nombre o la categoría'); return }
+  let k=($('#ap_k').value||'').trim(); if(!k){ const pf=nrm2(c).slice(0,3).toUpperCase()||'PRD'; let m=1; const used=new Set(S.stock.items.map(x=>x.code)); while(used.has(pf+'-'+String(m).padStart(3,'0'))) m++; k=pf+'-'+String(m).padStart(3,'0') }
+  if(S.stock.items.some(x=>x.code===k)){ toast('Ya existe ese código'); return }
+  try{
+    await api('/values/'+encodeURIComponent("'"+S.stock.title+"'!A:I")+':append?valueInputOption=USER_ENTERED&insertDataOption=INSERT_ROWS',{method:'POST',base:STOCK_API,body:JSON.stringify({values:[[k,c,n,($('#ap_d').value||'').trim(),+$('#ap_s').value||0,$('#ap_p').value===''?'':+$('#ap_p').value,'NO',hoyTexto(),'']]})});
+    $('#sheet').classList.remove('on'); toast('✓ Agregado'); S.stock.cat=c; await loadStock();
+  }catch(e){ toast('No se pudo agregar: '+e.message,5000) }
+}
 function openItem(row){
   const it=S.stock.items.find(x=>x.row===row); if(!it) return;
   $('#sp').innerHTML=`<div class="ohead"><div><div class="ow">${esc(it.prod)}</div><div class="od">${esc(it.code)} · ${esc(it.cat)}</div></div></div>
   <div class="f"><label>Stock</label><input type="number" id="it_stock" value="${it.stock}" min="0"></div>
   <div class="f"><label>Punto de pedido (avisar cuando el stock llegue a este número o menos)</label><input type="number" id="it_pp" value="${it.pp===null?'':it.pp}" min="0" placeholder="sin punto de pedido"></div>
   <div class="cfgrow"><span>Notificación del teléfono<br><small style="color:var(--mut)">Apagada: solo aparece el aviso en el Inicio</small></span><button class="sw2 ${it.aviso?'on':''}" id="it_av" data-onoff="1"></button></div>
+  <div class="f"><label>Avisar a (mails separados por coma; vacío = todos los usuarios)</label><input type="text" id="it_to" value="${esc(it.avisar||'')}" placeholder="persona1@gmail.com, persona2@gmail.com"></div>
   ${it.upd?`<div class="note">Última actualización: ${esc(it.upd)}</div>`:''}
   <div class="row"><button class="sec2" id="cx">Cerrar</button><button class="pri" id="it_save" data-row="${row}">Guardar</button></div>`;
   $('#sheet').classList.add('on'); $('#sheet').dataset.mode='item';
@@ -637,7 +689,7 @@ function openItem(row){
 async function saveItem(row){
   const it=S.stock.items.find(x=>x.row===row);
   const st=Math.max(0,+$('#it_stock').value||0), ppv=$('#it_pp').value; const av=$('#it_av').classList.contains('on');
-  try{ await stockWrite(it,{stock:st,pp:ppv===''?null:+ppv,aviso:av}); $('#sheet').classList.remove('on'); toast('✓ Guardado'); stockNotify(true) }catch(e){ toast(e.message,4500) }
+  try{ await stockWrite(it,{stock:st,pp:ppv===''?null:+ppv,aviso:av,avisar:($('#it_to').value||'').trim()}); $('#sheet').classList.remove('on'); toast('✓ Guardado'); stockNotify(true) }catch(e){ toast(e.message,4500) }
 }
 const NUMW={un:1,una:1,uno:1,dos:2,tres:3,cuatro:4,cinco:5,seis:6,siete:7,ocho:8,nueve:9,diez:10,doce:12,quince:15,veinte:20,treinta:30,cuarenta:40,cincuenta:50};
 async function runStockCommand(text){
@@ -685,12 +737,12 @@ async function syncCatalog(){
     for(const sz of ['S','M','L','XL']) for(const [m,n] of MATS) items.push(['CUA-'+sz+'-'+m,'Cuadros','Cuadro '+sz+' · '+n,'Cuadros']);
     for(const sz of ['XXL','XXXL']) items.push(['CUA-'+sz+'-CAN','Cuadros','Cuadro '+sz+' · Tela Canvas','Cuadros']);
     const old=new Map(S.stock.items.map(x=>[x.code,x]));
-    const rows=items.map(it=>{ const o=old.get(it[0]); return [it[0],it[1],it[2],it[3],o?o.stock:0,(o&&o.pp!==null)?o.pp:'',o&&o.aviso?'SI':'NO',o?o.upd:''] });
+    const rows=items.map(it=>{ const o=old.get(it[0]); return [it[0],it[1],it[2],it[3],o?o.stock:0,(o&&o.pp!==null)?o.pp:'',o&&o.aviso?'SI':'NO',o?o.upd:'',o?(o.avisar||''):''] });
     const codes=new Set(items.map(i=>i[0]));
-    S.stock.items.filter(o=>!codes.has(o.code)&&o.stock>0).forEach(o=>rows.push([o.code,o.cat,o.prod,(o.sub||'')+' (fuera del catálogo)',o.stock,o.pp===null?'':o.pp,o.aviso?'SI':'NO',o.upd]));
+    S.stock.items.filter(o=>!codes.has(o.code)).forEach(o=>rows.push([o.code,o.cat,o.prod,o.sub||'',o.stock,o.pp===null?'':o.pp,o.aviso?'SI':'NO',o.upd,o.avisar||'']));
     const t=S.stock.title||'Hoja 1';
-    await api('/values:batchClear',{method:'POST',base:STOCK_API,body:JSON.stringify({ranges:["'"+t+"'!A2:H1500"]})});
-    await api('/values:batchUpdate',{method:'POST',base:STOCK_API,body:JSON.stringify({valueInputOption:'USER_ENTERED',data:[{range:"'"+t+"'!A2:H"+(rows.length+1),values:rows}]})});
+    await api('/values:batchClear',{method:'POST',base:STOCK_API,body:JSON.stringify({ranges:["'"+t+"'!A2:I1500"]})});
+    await api('/values:batchUpdate',{method:'POST',base:STOCK_API,body:JSON.stringify({valueInputOption:'USER_ENTERED',data:[{range:"'"+t+"'!A2:I"+(rows.length+1),values:rows}]})});
     toast('✓ Catálogo sincronizado: '+rows.length+' productos',4500);
     await loadStock();
   }catch(e){ toast('No se pudo sincronizar: '+e.message,6000) }
@@ -869,7 +921,7 @@ async function applySheetFlag(si,row,fk,v){
 async function toggleSet(si,row,i,fk,forceVal){
   const n=nSets(si,row), cur=eff(si,row,i,fk), v=forceVal===undefined?!cur:forceVal;
   if(n<=1){ await applySheetFlag(si,row,fk,v); return }
-  logTouch(si,row);
+  logTouch(si,row,'set '+(i+1)+': '+fk+' '+(v?'✓':'✗'));
   const k=skey(si,row,i); SETS[k]=SETS[k]||{}; SETS[k][fk]=v;
   const all=[...Array(n).keys()].map(j=>eff(si,row,j,fk));
   const allT=all.every(x=>x), allF=all.every(x=>!x);
@@ -934,15 +986,16 @@ function renderHome(){
       return `<div class="sec">Total ${HTITLE[fk].toLowerCase()} por tamaño y formato</div>`+keys.map(k=>`<div class="ch"><div class="th"><span>${esc(k)}</span><i>${g[k].length}</i></div><div class="olist">${g[k].map(x=>`<button class="orow1" data-sw="${x.si}:${x.it.row}:${x.i}" data-o="${x.si}:${x.it.row}"><span class="nm"><b>${esc(x.it.v[x.D.cols.cliente]||'(sin nombre)')}</b><em>${esc(x.design)}</em></span><span class="src">${SHEETS[x.si].short}</span><small>${FDATE(x.it.date)}</small><i>›</i></button>`).join('')}</div></div>`).join('');
     },
     today:()=>{
-      const o=touchLoad(), todayS=new Date().toDateString(), rows=[];
+      const o=touchLoad(), todayS=new Date().toDateString(), rows=[], lim=Date.now()-14*86400000;
       SHEETS.forEach((_,si)=>{ const D=S.data[si]; if(!D) return; for(const it of D.items){
-        const fe=D.cols.fenvio>=0?parseFecha(it.v[D.cols.fenvio],it.raw[D.cols.fenvio]):null;
-        const t=o.k[si+':'+it.row]||0, sent=ok(it,D.cols.despachar)&&fe&&fe.toDateString()===todayS;
-        if(t||sent) rows.push({si,it,D,t,st:stage(it,D)}) } });
-      if(!rows.length) return `<div class="sec">Gestionados hoy</div><div class="ch"><div class="note">Todavía no tocaste ningún pedido hoy.</div></div>`;
-      const cls=st=>st==='enviado'?'st-sent':st==='desp'?'st-pack':st==='canc'?'st-canc':'st-pend';
-      rows.sort((a,b)=>b.t-a.t);
-      return `<div class="sec">Gestionados hoy · ${rows.length}</div><div class="legend"><span class="lg st-sent">Despachado</span><span class="lg st-pack">Embalado</span><span class="lg st-pend">Sin embalar</span></div><div class="ch"><div class="olist">${rows.map(({si,it,D,st})=>`<button class="orow1 ${cls(st)}" data-sw="${si}:${it.row}" data-o="${si}:${it.row}"><span class="tp">${esc(tipo(it,D))}</span><span class="nm"><b>${esc(it.v[D.cols.cliente]||'(sin nombre)')}</b><em>${esc(setsOf(it,D).map(x=>x.design).join(' + '))}</em></span><small>${FDATE(it.date)}</small><i>›</i></button>`).join('')}</div></div>`;
+        const key=si+':'+it.row, fe=D.cols.fenvio>=0?parseFecha(it.v[D.cols.fenvio],it.raw[D.cols.fenvio]):null;
+        const t=o.k[key]||0, a=ACT.today[key], sent=ok(it,D.cols.despachar)&&fe&&fe.toDateString()===todayS;
+        const warn=ok(it,D.cols.despachar)&&!ok(it,D.cols.embalar)&&!isCancel(it)&&it.date&&+it.date>lim;
+        if(t||a||sent||warn) rows.push({si,it,D,t:t||(a?1:0),st:stage(it,D),warn,a}) } });
+      if(!rows.length) return `<div class="sec">Gestionados hoy</div><div class="ch"><div class="note">Todavía no hay movimientos hoy.</div></div>`;
+      const cls=r=>r.warn?'st-warn':r.st==='enviado'?'st-sent':r.st==='desp'?'st-pack':r.st==='canc'?'st-canc':'st-pend';
+      rows.sort((a,b)=>(b.warn-a.warn)||(b.t-a.t));
+      return `<div class="sec">Gestionados hoy · ${rows.length}</div><div class="legend"><span class="lg st-sent">Despachado</span><span class="lg st-pack">Embalado</span><span class="lg st-pend">Sin embalar</span><span class="lg st-warn">⚠ Despachado sin embalar</span></div><div class="ch"><div class="olist">${rows.map(r=>{const {si,it,D}=r; return `<button class="orow1 ${cls(r)}" data-sw="${si}:${it.row}" data-o="${si}:${it.row}"><span class="tp">${esc(tipo(it,D))}</span><span class="nm"><b>${esc(it.v[D.cols.cliente]||'(sin nombre)')}</b><em>${r.warn?'⚠ Despachado sin embalar · ':''}${esc(setsOf(it,D).map(x=>x.design).join(' + '))}</em></span><small>${FDATE(it.date)}</small><i>›</i></button>`}).join('')}</div></div>`;
     },
     period:()=>`${perUI(true)}${S.loadedAt?`<div class="note" style="margin:-6px 4px 10px">Actualizado ${new Date(S.loadedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</div>`:''}`
   };
@@ -960,6 +1013,8 @@ function renderConfigProd(){
   <div class="setcard"><div class="cfgrow"><span>Notificación del teléfono (una vez por día)<br><small style="color:var(--mut)">Permiso: ${notif}. Cada producto elige si avisa o no desde su ficha.</small></span>${sw(CFG.notif,'data-cfg="notif:1"')}</div></div>
   <div class="sec">Catálogo</div>
   <div class="setcard"><div class="cfgrow"><span>Actualizar la lista de productos desde el Catálogo de Productos<br><small style="color:var(--mut)">Conserva el stock cargado</small></span><button class="chip on" data-act="syncCat">↻ Sincronizar</button></div></div>
+  <div class="sec">Mi mail (para recibir avisos de punto de pedido)</div>
+  <div class="setcard"><div class="cfgrow" style="display:block"><input type="email" id="myemail" class="csearch" style="margin:0" value="${esc(ls.get('myemail')||'')}" placeholder="tu mail de Google"></div></div>
   <div class="sec">Cuenta y datos</div>
   <div class="setcard">
     <div class="cfgrow"><span>Guía paso a paso de esta pantalla</span><button class="chip on" data-act="tour">▶ Ver guía</button></div>
@@ -996,6 +1051,8 @@ function renderConfig(){
   <div class="sec">Acceso de otras personas</div>
   <div class="setcard"><div class="cfgrow" style="display:block;line-height:1.5"><span style="font-weight:400">Cualquier persona con una cuenta de Google que tenga acceso a la planilla “Planillas de PEDIDOS” puede usar la app con su mail. Si no tiene acceso a la planilla, no puede ver ni editar nada. Para sumar a alguien: compartile la planilla desde Google Sheets y pasale el link de la app.</span>
     <div class="chips" style="margin-top:10px"><button class="chip on" data-act="opensheet">Abrir planilla para compartir</button><button class="chip" data-act="shareapp">⇪ Compartir link de la app</button></div></div></div>
+  <div class="sec">Mi mail (para recibir avisos de punto de pedido)</div>
+  <div class="setcard"><div class="cfgrow" style="display:block"><input type="email" id="myemail" class="csearch" style="margin:0" value="${esc(ls.get('myemail')||'')}" placeholder="tu mail de Google"></div></div>
   <div class="sec">Cuenta y datos</div>
   <div class="setcard">
     <div class="cfgrow"><span>Guía paso a paso de la app</span><button class="chip on" data-act="tour">▶ Ver guía</button></div>
@@ -1390,6 +1447,7 @@ document.addEventListener('click',async e=>{
     $('#sw2p').innerHTML=`<div class="ow">¿Eliminar todo el stock?</div><div class="od" style="margin:6px 0 14px">${esc(it.prod)} quedará en 0 (hoy tiene ${it.stock}).</div><div class="row"><button class="sec2" id="sw2x">Cancelar</button><button class="pri" data-qdelok="${r}">Sí, eliminar</button></div>`; return }
   const qdo=t.closest('[data-qdelok]'); if(qdo){ const it=S.stock.items.find(x=>x.row===+qdo.dataset.qdelok); $('#sw2').classList.remove('on'); try{ await stockAdjust(it,'set',0) }catch(er){ toast(er.message,4500) } return }
   if(t.id==='qok'){ const q=S.q2, it=S.stock.items.find(x=>x.row===q.row), n=Math.max(0,Math.round(+$('#qn').value||0)); $('#sw2').classList.remove('on'); try{ await stockAdjust(it,q.mode,n) }catch(er){ toast(er.message,4500) } return }
+  if(t.id==='ap_ok'){ saveAddProd(); return }
   if(t.id==='it_save'){ saveItem(+t.dataset.row); return }
   if(t.dataset&&t.dataset.onoff){ t.classList.toggle('on'); return }
   const sa=t.closest('[data-sact]'); if(sa){ const [si,r,i,fk,mode]=sa.dataset.sact.split(':'); const v=mode==='mark';
@@ -1407,6 +1465,7 @@ document.addEventListener('click',async e=>{
   const ac=t.closest('[data-act]'); if(ac){ if(ac.dataset.act==='reload'){ if(S.mod==='prod') loadStock(); else loadAll() } if(ac.dataset.act==='notif') askNotif();
     if(ac.dataset.act==='share') shareList();
     if(ac.dataset.act==='install') doInstall();
+    if(ac.dataset.act==='addprod') openAddProd();
     if(ac.dataset.act==='syncCat') syncCatalog();
     if(ac.dataset.act==='modsw'){ const old=document.getElementById('mdd'); if(old){ old.remove(); return } const d=document.createElement('div'); d.id='mdd'; d.className='mdd'; d.innerHTML=Object.keys(MODS).map(k=>`<button class="${S.mod===k?'on':''}" data-setmod="${k}">${k==='prod'?'📦':'📋'} ${esc(modName(k))}${S.mod===k?' ✓':''}</button>`).join(''); document.querySelector('header .top').appendChild(d); return }
     if(ac.dataset.act==='defper'){ CFG.defPer=JSON.parse(JSON.stringify(S.per)); cfgSave(); toast('Predeterminado: '+perLabel()); render({keep:true}) }
@@ -1441,6 +1500,7 @@ function cfgFilter(q){
   });
 }
 document.addEventListener('input',e=>{
+  if(e.target.id==='myemail'){ ls.set('myemail',e.target.value.trim()); return }
   if(e.target.id==='sq'){ S.stock.q=e.target.value; clearTimeout(S.sdt); S.sdt=setTimeout(()=>{ const pos=e.target.selectionStart; render({keep:true}); const q=$('#sq'); if(q){q.focus();q.setSelectionRange(pos,pos)} },180); return }
   if(e.target.id==='cs'){ cfgFilter(e.target.value); return }
   if(e.target.id==='q'){S.q=e.target.value;S.focusQ=true;S.limit=60;clearTimeout(S.dt);S.dt=setTimeout(()=>render({keep:true}),200)}
@@ -1458,7 +1518,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v25';
+const APP_V='v26';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

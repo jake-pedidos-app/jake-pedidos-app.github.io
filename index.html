@@ -142,6 +142,24 @@ button.alert{font-size:14px;color:var(--ink);font-family:inherit}
 #tour .tb button.sk{background:var(--peach-l);color:var(--coral-d)}
 .odate{font-size:14px;font-weight:800;color:var(--ink)}.odate i{font-style:normal;font-weight:600;color:var(--coral-d)}
 .perx{display:flex;flex-wrap:wrap;gap:10px;margin:8px 0;font-size:13px}.perx input{border:1px solid var(--line);border-radius:10px;padding:7px 8px;font:inherit;max-width:150px;background:#fff}
+.cmeta{flex-wrap:wrap;margin-bottom:2px}
+.cmeta .rt{margin-left:auto;display:flex;align-items:center;gap:6px}.cmeta .rt small{color:#b5aaa3;font-size:11px}
+.cmeta .src{margin:0}
+.dpill{display:inline-flex;align-items:center;gap:4px;border-radius:999px;padding:5px 11px;font-size:12.5px;font-weight:700;background:var(--peach-l);color:var(--coral-d)}
+.dpill.grn{background:#E6F4EC;color:#2E7D56}.dpill.amb{background:#FFF1D6;color:#9A6A00}.dpill.red{background:#FDE3DF;color:#C0392B}.dpill.none{background:#EEE9E5;color:#8A7F78}.dpill.old0{background:#F1ECE8;color:#8A7F78}.dpill.sent{background:#E6F4EC;color:#2E7D56}
+.card{border-radius:22px;padding:16px;box-shadow:0 4px 18px rgba(58,52,49,.07);border:0}
+.card .t{font-size:18px;line-height:1.25;margin:10px 0 6px}
+.tipo{border-radius:999px;padding:4px 11px}
+.cli{margin:10px 0 4px;padding-top:10px;border-top:1px dashed var(--line)}
+.cli span{font-size:14px;color:var(--ink)}
+.edit{background:var(--peach-l);border-radius:999px;padding:6px 14px}
+.tg{margin-top:12px;display:grid;grid-template-columns:repeat(auto-fit,minmax(86px,1fr));gap:8px}
+.tg button{padding:11px 8px;border-radius:14px;text-align:center;border:0;background:#F6F0EB;font-size:13px}
+.tg button.on{box-shadow:0 3px 10px rgba(237,107,93,.35)}
+.kpi{border:0;border-radius:22px;box-shadow:0 4px 18px rgba(58,52,49,.07)}
+.ch{border:0;border-radius:22px;box-shadow:0 4px 18px rgba(58,52,49,.07)}
+.chip{border:0;background:#fff;box-shadow:0 1px 4px rgba(58,52,49,.08)}
+.setcard{border:0;box-shadow:0 4px 18px rgba(58,52,49,.06);border-radius:22px}
 </style>
 </head>
 <body>
@@ -283,11 +301,12 @@ function perLabel(){
   if(L[p.k]) return L[p.k]; if(p.k==='n') return p.n>0?`Últimos ${p.n} días`:'Todo';
   const f=x=>x?x.split('-').reverse().join('/'):'…'; return `${f(p.from)} → ${f(p.to)}`;
 }
-function inWindow(it){ if(!it.date) return true; const [a,b]=perBounds(), t=it.date.getTime(); return t>=a&&t<=b }
+function inWindow(it){ if(!it.date) return !CFG.nodate; const [a,b]=perBounds(), t=it.date.getTime(); return t>=a&&t<=b }
 function perUI(){
   const p=S.per||{}, on=(k,n)=>p.k===k&&(n===undefined||p.n===n)?'on':'';
   const pre=[['today','Hoy'],['d3','3 días'],['week','Esta semana'],['month','Este mes'],['n:30','30 días'],['n:60','60 días'],['n:90','90 días'],['all','Todo']];
-  return `<div class="chips">${pre.map(([k,l])=>{const [kk,nn]=k.split(':');return `<button class="chip ${on(kk,nn?+nn:undefined)}" data-per="${k}">${l}</button>`}).join('')}</div>
+  const nd=`<div class="cfgrow" style="padding:8px 0 0;border:0"><span>Ignorar pedidos sin fecha</span><button class="sw2 ${CFG.nodate?'on':''}" data-cfg="nodate:1"></button></div>`;
+  return nd+`<div class="chips">${pre.map(([k,l])=>{const [kk,nn]=k.split(':');return `<button class="chip ${on(kk,nn?+nn:undefined)}" data-per="${k}">${l}</button>`}).join('')}</div>
   <div class="perx"><label>Últimos <input type="number" min="1" id="pn" value="${p.k==='n'?p.n:''}" placeholder="N"> días</label></div>
   <div class="perx"><label>Desde <input type="date" id="pf" value="${p.k==='custom'?p.from||'':''}"></label><label>hasta <input type="date" id="pt" value="${p.k==='custom'?p.to||'':''}"></label></div>`;
 }
@@ -397,13 +416,13 @@ async function toggle(si,row,c){
 /* ---------- Ajustes (se guardan en este dispositivo) ---------- */
 const SECLBL={install:'Botón de instalar',kpis:'Tarjetas de resumen',alerts:'Avisos (demorados, sin pago, notificaciones)',share:'Botón compartir lista',sheets:'Para embalar por planilla',totals:'Total por tamaño y formato',period:'Selector de período'};
 const KPILBL={emb:'Para embalar',desp:'Embalados, sin despachar',prod:'En producción',late:'Demorados',nopago:'Sin pago',canc:'Cancelados'};
-const CFG_DEF={order:['install','kpis','alerts','share','sheets','totals','period'],hide:{},kpis:{emb:1,desp:1,prod:1,late:0,nopago:0,canc:1},sheets:{0:1,1:1,2:1},start:'home'};
+const CFG_DEF={order:['install','kpis','alerts','share','sheets','totals','period'],hide:{},kpis:{emb:1,desp:1,prod:1,late:0,nopago:0,canc:1},sheets:{0:1,1:1,2:1},start:'home',nodate:1};
 function cfgLoad(){
   let c={}; try{ c=JSON.parse(ls.get('cfg')||'{}') }catch(e){}
   const d=JSON.parse(JSON.stringify(CFG_DEF));
   const o=Array.isArray(c.order)?c.order.filter(k=>d.order.includes(k)):[];
   d.order.forEach(k=>{ if(!o.includes(k)) o.push(k) });
-  return {order:o,hide:Object.assign(d.hide,c.hide||{}),kpis:Object.assign(d.kpis,c.kpis||{}),sheets:Object.assign(d.sheets,c.sheets||{}),start:c.start||'home'};
+  return {order:o,hide:Object.assign(d.hide,c.hide||{}),kpis:Object.assign(d.kpis,c.kpis||{}),sheets:Object.assign(d.sheets,c.sheets||{}),start:c.start||'home',nodate:c.nodate===undefined?1:c.nodate};
 }
 let CFG=cfgLoad();
 function cfgSave(){ ls.set('cfg',JSON.stringify(CFG)) }
@@ -414,6 +433,7 @@ function cfgToggle(k){
   else if(type==='sheet') CFG.sheets[key]=CFG.sheets[key]?0:1;
   else if(type==='group'){ S.group=!S.group; ls.set('group',S.group?'1':'0') }
   else if(type==='start') CFG.start=key;
+  else if(type==='nodate'){ CFG.nodate=CFG.nodate?0:1; notifyBadge() }
   cfgSave(); render({keep:true});
 }
 function cfgMove(m){
@@ -465,6 +485,7 @@ function tourStart(){ S.view='home'; render(); tourShow(0) }
 function matches(it,D,st){
   const q=norm(S.q.trim());
   if(q && !norm(it.v.join(' ')).includes(q)) return false;
+  if(S.filter==='nodate') return !it.date;
   if(S.filter!=='todos' && !inWindow(it)) return false;
   switch(S.filter){
     case 'emb': return st==='emb';
@@ -477,7 +498,7 @@ function matches(it,D,st){
     default: return true;
   }
 }
-const FILTERS=[['emb','Para embalar'],['desp','Embalados'],['prod','En producción'],['late','Demorados'],['nopago','Sin pago'],['pend','Sin despachar'],['canc','Cancelados'],['todos','Todos']];
+const FILTERS=[['emb','Para embalar'],['desp','Embalados'],['prod','En producción'],['late','Demorados'],['nopago','Sin pago'],['pend','Sin despachar'],['canc','Cancelados'],['nodate','Sin fecha'],['todos','Todos']];
 
 function cardHTML(si,D,it){
   const g=c=>c>=0?esc(it.v[c]):'';
@@ -486,17 +507,20 @@ function cardHTML(si,D,it){
   const sel=S.selMode&&S.sel.has(key);
   const tags=S.selMode?'':FLAGS.filter(f=>D.cols[f.key]>=0).map(f=>{const o=ok(it,D.cols[f.key]); return `<button class="${o?'on':''}" data-t="${si}:${it.row}:${D.cols[f.key]}">${o?'✓ ':''}${f.label}</button>`}).join('');
   const t=tipo(it,D);
-  const fe=D.cols.fenvio>=0&&it.v[D.cols.fenvio]?`<div class="fecha">📦 Enviado: ${esc(it.v[D.cols.fenvio])}</div>`:'';
+  const fe=D.cols.fenvio>=0&&it.v[D.cols.fenvio]?`<span class="dpill sent">📦 Enviado ${esc(it.v[D.cols.fenvio])}</span>`:'';
+  const age=it.date?Math.floor((new Date().setHours(0,0,0,0)-new Date(it.date).setHours(0,0,0,0))/86400000):null;
+  const cls=age===null?'none':(cancel||ok(it,D.cols.despachar))?'old0':age>S.late?'red':age>=3?'amb':'grn';
+  const dtxt=it.date?it.date.toLocaleDateString('es-AR',{day:'numeric',month:'short'}):'Sin fecha';
   return `<article class="card ${cancel?'cancel':''} ${sel?'sel':''}" ${S.selMode?`data-sel="${key}"`:''}>
     ${S.selMode?`<div class="selbox">${sel?'✓':''}</div>`:''}
     ${cancel?'<div class="badge-c">CANCELADO</div>':''}
-    <div class="cmeta"><span class="odate">📅 ${g(D.cols.fecha)||'sin fecha'}${it.date?` <i>· ${ageTxt(it.date)}</i>`:''}</span><span><span class="src">${SHEETS[si].short}</span>fila ${it.row}</span></div>
+    <div class="cmeta"><span class="dpill ${cls}">📅 ${dtxt}${it.date?` · ${ageTxt(it.date)}`:''}</span>${fe}<span class="rt"><span class="src">${SHEETS[si].short}</span><small>#${it.row}</small></span></div>
     <div class="t">${g(D.cols.diseno)||'(sin diseño)'}</div>
     <span class="tipo">${esc(t)}</span>
     <div class="cli"><span>${g(D.cols.cliente)}</span>${S.selMode?'':`<button class="edit" data-e="${si}:${it.row}">Editar</button>`}</div>
     ${D.cols.notas>=0&&it.v[D.cols.notas]?`<div class="note">📝 ${g(D.cols.notas)}</div>`:''}
     ${D.cols.enviar>=0&&it.v[D.cols.enviar]?`<div class="note">🚚 ${g(D.cols.enviar)}</div>`:''}
-    ${tags?`<div class="tg">${tags}</div>`:''}${fe}</article>`;
+    ${tags?`<div class="tg">${tags}</div>`:''}</article>`;
 }
 
 function renderHome(){
@@ -591,7 +615,7 @@ function renderSheets(){
     else if(total>items.length) body+=`<div class="msg"><button class="chip" id="more">Ver más (${total-items.length})</button></div>`;
   }
   const base=rowsFor(S.tab).filter(({D,it})=>inWindow(it)||S.filter==='todos');
-  const cnt={emb:0,desp:0,prod:0,canc:0,late:0,nopago:0,pend:0};
+  const cnt={nodate:rowsFor(S.tab).filter(({it})=>!it.date).length,emb:0,desp:0,prod:0,canc:0,late:0,nopago:0,pend:0};
   base.forEach(({D,it})=>{const st=stage(it,D); if(cnt[st]!==undefined) cnt[st]++; if(isLate(it,st)) cnt.late++; if(isNoPago(it,D,st)) cnt.nopago++; if(st!=='enviado'&&st!=='canc') cnt.pend++});
   const chips=FILTERS.map(([k,l])=>{const n=k==='todos'?null:cnt[k]; return `<button class="chip ${S.filter===k?'on':''}" data-f="${k}">${l}${n!=null?`<small>${n}</small>`:''}</button>`}).join('');
   const canGroup=S.filter==='emb'||S.filter==='desp';

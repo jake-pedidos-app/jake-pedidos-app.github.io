@@ -111,6 +111,18 @@ nav button.on{color:var(--coral-d)}
 @keyframes r{to{transform:rotate(360deg)}}
 .skel{height:110px;border-radius:18px;background:linear-gradient(90deg,#f3e9e1,#fbf5f0,#f3e9e1);background-size:200% 100%;animation:sh 1.2s infinite;margin-bottom:12px}
 @keyframes sh{to{background-position:-200% 0}}
+.card{position:relative}
+.card.sel{border-color:var(--coral);box-shadow:0 0 0 2px var(--coral)}
+.selbox{position:absolute;top:12px;right:12px;width:26px;height:26px;border-radius:50%;border:2px solid var(--line);display:grid;place-items:center;color:#fff;font-weight:800;background:#fff}
+.card.sel .selbox{background:var(--coral);border-color:var(--coral)}
+.acts{margin-top:6px}
+.grp{display:flex;justify-content:space-between;align-items:center;margin:16px 4px 8px;font-size:13px;font-weight:800;color:var(--coral-d);text-transform:uppercase;letter-spacing:.05em}
+.grp span{background:var(--peach);color:var(--coral-d);border-radius:999px;padding:2px 10px;font-size:12px}
+#bulk{position:fixed;left:10px;right:10px;bottom:calc(68px + env(safe-area-inset-bottom));background:var(--ink);color:#fff;border-radius:16px;padding:10px 12px;display:flex;gap:8px;align-items:center;z-index:8;box-shadow:0 8px 24px rgba(0,0,0,.25)}
+#bulk span{flex:1;font-size:14px;font-weight:700}
+#bulk button{border:0;border-radius:10px;padding:9px 12px;font-weight:700;font-size:13px;background:var(--coral);color:#fff}
+#bulk button.sec{background:rgba(255,255,255,.15)}
+button.alert{font-size:14px;color:var(--ink);font-family:inherit}
 </style>
 </head>
 <body>
@@ -136,7 +148,7 @@ const norm = s => String(s||'').normalize('NFD').replace(/[̀-ͯ]/g,'').toLowerC
 const ls = {get:k=>{try{return localStorage.getItem(k)}catch(e){return null}},set:(k,v)=>{try{localStorage.setItem(k,v)}catch(e){}}};
 
 let token = null, tokenExp = 0, tokenClient = null;
-const S = {view:'home', tab:ALL, q:'', filter:'emb', data:{}, loading:false, days:+(ls.get('days')||60), limit:60};
+const S = {view:'home', tab:ALL, q:'', filter:'emb', data:{}, loading:false, days:+(ls.get('days')||60), limit:60, late:+(ls.get('late')||7), group:ls.get('group')!=='0', selMode:false, sel:new Set(), visible:[]};
 
 function toast(m, ms=2200){const t=$('#toast');t.textContent=m;t.style.display='block';clearTimeout(toast.t);toast.t=setTimeout(()=>t.style.display='none',ms)}
 function toastAct(msg,label,fn){
@@ -255,6 +267,8 @@ function tipo(it,D){
   const size = m[2]?m[2].toUpperCase():'';
   return `Set de ${m[1]}${size?' '+size:''} · ${fmt}`;
 }
+function isNoPago(it,D,st){return st!=='canc'&&st!=='enviado'&&D.cols.pago>=0&&D.isBool[D.cols.pago]&&!ok(it,D.cols.pago)}
+function isLate(it,st){return st!=='canc'&&st!=='enviado'&&!!it.date&&(Date.now()-it.date.getTime())>S.late*86400000}
 function rowsFor(tab){
   const out=[];
   SHEETS.forEach((s,si)=>{ if(tab!==ALL&&tab!==si) return; const D=S.data[si]; if(!D) return;
@@ -262,7 +276,7 @@ function rowsFor(tab){
   return out;
 }
 function summarize(){
-  const r={emb:[],desp:0,prod:0,canc:0,sinPago:0,perSheet:[]};
+  const r={emb:[],desp:0,prod:0,canc:0,sinPago:0,late:0,perSheet:[]};
   SHEETS.forEach((s,si)=>{
     const D=S.data[si]; const p={si,emb:[],desp:0,prod:0,canc:0,tipos:{}};
     if(D) for(const it of D.items){
@@ -272,7 +286,8 @@ function summarize(){
       else if(st==='desp') p.desp++;
       else if(st==='prod') p.prod++;
       else if(st==='canc') p.canc++;
-      if(st!=='canc'&&st!=='enviado'&&D.cols.pago>=0&&D.isBool[D.cols.pago]&&!ok(it,D.cols.pago)) r.sinPago++;
+      if(isNoPago(it,D,st)) r.sinPago++;
+      if(isLate(it,st)) r.late++;
     }
     r.perSheet.push(p);
     r.emb.push(...p.emb.map(it=>({si,it})));
@@ -346,27 +361,32 @@ function matches(it,D,st){
     case 'desp': return st==='desp';
     case 'prod': return st==='prod';
     case 'canc': return st==='canc';
+    case 'late': return isLate(it,st);
+    case 'nopago': return isNoPago(it,D,st);
     case 'pend': return st!=='enviado'&&st!=='canc';
     default: return true;
   }
 }
-const FILTERS=[['emb','Para embalar'],['desp','Embalados'],['prod','En producción'],['pend','Sin despachar'],['canc','Cancelados'],['todos','Todos']];
+const FILTERS=[['emb','Para embalar'],['desp','Embalados'],['prod','En producción'],['late','Demorados'],['nopago','Sin pago'],['pend','Sin despachar'],['canc','Cancelados'],['todos','Todos']];
 
 function cardHTML(si,D,it){
   const g=c=>c>=0?esc(it.v[c]):'';
   const cancel=isCancel(it);
-  const tags=FLAGS.filter(f=>D.cols[f.key]>=0).map(f=>{const o=ok(it,D.cols[f.key]); return `<button class="${o?'on':''}" data-t="${si}:${it.row}:${D.cols[f.key]}">${o?'✓ ':''}${f.label}</button>`}).join('');
+  const key=si+':'+it.row;
+  const sel=S.selMode&&S.sel.has(key);
+  const tags=S.selMode?'':FLAGS.filter(f=>D.cols[f.key]>=0).map(f=>{const o=ok(it,D.cols[f.key]); return `<button class="${o?'on':''}" data-t="${si}:${it.row}:${D.cols[f.key]}">${o?'✓ ':''}${f.label}</button>`}).join('');
   const t=tipo(it,D);
   const fe=D.cols.fenvio>=0&&it.v[D.cols.fenvio]?`<div class="fecha">📦 Enviado: ${esc(it.v[D.cols.fenvio])}</div>`:'';
-  return `<article class="card ${cancel?'cancel':''}">
+  return `<article class="card ${cancel?'cancel':''} ${sel?'sel':''}" ${S.selMode?`data-sel="${key}"`:''}>
+    ${S.selMode?`<div class="selbox">${sel?'✓':''}</div>`:''}
     ${cancel?'<div class="badge-c">CANCELADO</div>':''}
     <div class="cmeta"><span>${g(D.cols.fecha)}</span><span><span class="src">${SHEETS[si].short}</span>fila ${it.row}</span></div>
     <div class="t">${g(D.cols.diseno)||'(sin diseño)'}</div>
     <span class="tipo">${esc(t)}</span>
-    <div class="cli"><span>${g(D.cols.cliente)}</span><button class="edit" data-e="${si}:${it.row}">Editar</button></div>
+    <div class="cli"><span>${g(D.cols.cliente)}</span>${S.selMode?'':`<button class="edit" data-e="${si}:${it.row}">Editar</button>`}</div>
     ${D.cols.notas>=0&&it.v[D.cols.notas]?`<div class="note">📝 ${g(D.cols.notas)}</div>`:''}
     ${D.cols.enviar>=0&&it.v[D.cols.enviar]?`<div class="note">🚚 ${g(D.cols.enviar)}</div>`:''}
-    <div class="tg">${tags}</div>${fe}</article>`;
+    ${tags?`<div class="tg">${tags}</div>`:''}${fe}</article>`;
 }
 
 function renderHome(){
@@ -380,8 +400,9 @@ function renderHome(){
     <button class="kpi" data-go="prod"><span>En producción</span><b>${sum.prod}</b></button>
     <button class="kpi red" data-go="canc"><span>Cancelados</span><b>${sum.canc}</b></button></div>`;
   if(window.Notification && Notification.permission==='default') h+=`<div class="alert" style="margin-top:12px">🔔 Activá los avisos para que te avise cuántos pedidos hay para embalar.<button data-act="notif">Activar</button></div>`;
-  if(sum.sinPago) h+=`<div class="alert" style="margin-top:12px">Hay ${sum.sinPago} pedido(s) sin pago confirmado.</div>`;
-  h+=`<div class="sec">Para embalar por planilla</div>`;
+  if(sum.late) h+=`<button class="alert" style="margin-top:12px;display:block;width:100%;text-align:left" data-go="late">⏰ ${sum.late} pedido(s) llevan más de ${S.late} días sin despachar. <b>Ver</b></button>`;
+  if(sum.sinPago) h+=`<button class="alert" style="margin-top:12px;display:block;width:100%;text-align:left" data-go="nopago">Hay ${sum.sinPago} pedido(s) sin pago confirmado. <b>Ver</b></button>`;
+  h+=`<div class="sec">Para embalar por planilla</div><div style="margin:0 2px 10px"><button class="chip" data-act="share">⇪ Compartir lista de embalado</button></div>`;
   sum.perSheet.forEach(p=>{
     const keys=Object.keys(p.tipos).sort((a,b)=>p.tipos[b]-p.tipos[a]);
     h+=`<div class="ch"><div class="r"><b>${SHEETS[p.si].label}</b><span class="n">${p.emb.length}</span></div>`+
@@ -397,26 +418,41 @@ function renderHome(){
 }
 function renderSheets(){
   let body='';
+  S.visible=[];
   if(S.loading&&!S.data[0]) body='<div class="skel"></div><div class="skel"></div>';
   else if(!S.data[0]) body=`<div class="msg">${esc(S.err||'Sin datos')}<br><br><button class="chip" data-act="reload">Reintentar</button></div>`;
   else{
     const all=rowsFor(S.tab).filter(({D,it})=>matches(it,D,stage(it,D)));
-    const asc=S.filter==='emb'||S.filter==='desp';
-    all.sort((a,b)=>{const da=a.it.date?a.it.date.getTime():0, db=b.it.date?b.it.date.getTime():0; return asc?(da-db||a.it.row-b.it.row):(db-da||b.it.row-a.it.row)});
+    const asc=['emb','desp','late'].includes(S.filter);
+    const grouped=S.group&&(S.filter==='emb'||S.filter==='desp');
+    all.forEach(x=>{x.tp=tipo(x.it,x.D)});
+    all.sort((a,b)=>{
+      if(grouped){ const c=a.tp.localeCompare(b.tp); if(c) return c; const d=norm(a.D.cols.diseno>=0?a.it.v[a.D.cols.diseno]:'').localeCompare(norm(b.D.cols.diseno>=0?b.it.v[b.D.cols.diseno]:'')); if(d) return d; }
+      const da=a.it.date?a.it.date.getTime():0, db=b.it.date?b.it.date.getTime():0; return asc?(da-db||a.it.row-b.it.row):(db-da||b.it.row-a.it.row)});
+    S.visible=all.map(x=>x.si+':'+x.it.row);
     const total=all.length, items=all.slice(0,S.limit);
-    body=items.map(({si,D,it})=>cardHTML(si,D,it)).join('');
+    if(grouped){
+      const cnt={}; all.forEach(x=>cnt[x.tp]=(cnt[x.tp]||0)+1);
+      let last=null;
+      body=items.map(({si,D,it,tp})=>{ let hd=''; if(tp!==last){ last=tp; hd=`<div class="grp">${esc(tp)}<span>${cnt[tp]}</span></div>`} return hd+cardHTML(si,D,it) }).join('');
+    } else body=items.map(({si,D,it})=>cardHTML(si,D,it)).join('');
     if(!items.length) body='<div class="empty">Nada para mostrar con este filtro.</div>';
     else if(total>items.length) body+=`<div class="msg"><button class="chip" id="more">Ver más (${total-items.length})</button></div>`;
   }
-  // contadores por filtro, sobre la pestaña elegida
   const base=rowsFor(S.tab).filter(({D,it})=>inWindow(it)||S.filter==='todos');
-  const cnt={}; base.forEach(({D,it})=>{const st=stage(it,D); cnt[st]=(cnt[st]||0)+1});
-  const C={emb:cnt.emb||0, desp:cnt.desp||0, prod:cnt.prod||0, canc:cnt.canc||0, pend:(base.length-(cnt.enviado||0)-(cnt.canc||0))};
-  const chips=FILTERS.map(([k,l])=>{const n=k==='todos'?null:C[k]; return `<button class="chip ${S.filter===k?'on':''}" data-f="${k}">${l}${n!=null?`<small>${n}</small>`:''}</button>`}).join('');
+  const cnt={emb:0,desp:0,prod:0,canc:0,late:0,nopago:0,pend:0};
+  base.forEach(({D,it})=>{const st=stage(it,D); if(cnt[st]!==undefined) cnt[st]++; if(isLate(it,st)) cnt.late++; if(isNoPago(it,D,st)) cnt.nopago++; if(st!=='enviado'&&st!=='canc') cnt.pend++});
+  const chips=FILTERS.map(([k,l])=>{const n=k==='todos'?null:cnt[k]; return `<button class="chip ${S.filter===k?'on':''}" data-f="${k}">${l}${n!=null?`<small>${n}</small>`:''}</button>`}).join('');
+  const canGroup=S.filter==='emb'||S.filter==='desp';
+  const acts=`<div class="chips acts">
+      <button class="chip ${S.selMode?'on':''}" data-act="select">☑ Seleccionar</button>
+      ${canGroup?`<button class="chip ${S.group?'on':''}" data-act="group">Agrupar por tamaño</button>`:''}
+      ${S.filter==='emb'?`<button class="chip" data-act="share">⇪ Compartir lista</button>`:''}</div>`;
   const TABS=[[ALL,'Todas'],...SHEETS.map((s,i)=>[i,s.label])];
+  const bulk=S.selMode?`<div id="bulk"><span>${S.sel.size} seleccionados</span><button class="sec" data-act="selall">Todos</button><button data-bulk="embalar">Embalado</button><button data-bulk="despachar">Despachado</button><button class="sec" data-act="select">✕</button></div>`:'';
   return `<div class="tabs">${TABS.map(([k,l])=>`<button class="tab ${S.tab===k?'on':''}" data-tab="${k}">${l}</button>`).join('')}</div>
     <div class="bar"><input id="q" type="search" placeholder="Buscar cliente, diseño, notas…" value="${esc(S.q)}" autocomplete="off">
-    <div class="chips" id="fchips">${chips}</div></div><div id="list">${body}</div>`;
+    <div class="chips" id="fchips">${chips}</div>${acts}</div><div id="list">${body}</div>${bulk}`;
 }
 function render(opt={}){
   const y=window.scrollY;
@@ -424,13 +460,14 @@ function render(opt={}){
   if(!clientId()) return renderSetup();
   if(!token) return renderLogin();
   const home=S.view==='home';
+  if(home) S.selMode=false;
   $('#app').innerHTML=`<header><div class="top">
       <button class="brand" data-view="home" aria-label="Inicio"><img src="jk-192.png" alt="Jake"><b>Jake Central</b></button>
       <button class="ibtn" data-act="reload" title="Actualizar">⟳</button><button class="ibtn" id="lo" title="Salir">⎋</button></div>
       ${home?'':`<div class="tabs" style="padding-bottom:0"></div>`}
     </header>
     ${home?`<div id="home">${renderHome()}</div>`:renderSheets()}
-    <button id="mic" title="Hablar">🎤</button>
+    ${S.selMode?'':'<button id="mic" title="Hablar">🎤</button>'}
     <nav><button class="${home?'on':''}" data-view="home"><b>⌂</b>Inicio</button><button class="${!home?'on':''}" data-view="sheets"><b>☰</b>Pedidos</button></nav>`;
   // restaurar desplazamientos horizontales (chips y pestañas) para que no salten al inicio
   document.querySelectorAll('.chips,.tabs').forEach((el,i)=>{ if(scrolls[i]!=null) el.scrollLeft=scrolls[i] });
@@ -470,6 +507,55 @@ async function saveEdit(){
   const b=$('#sv');b.innerHTML='<span class="spin" style="border-color:#fff;border-top-color:transparent"></span>';
   try{await writeCells(si,it,ch);$('#sheet').classList.remove('on');toast('✓ Guardado');render({keep:true});notifyBadge()}
   catch(e){toast('No se pudo guardar: '+e.message,4500);b.textContent='Guardar'}
+}
+
+/* ---------- Selección masiva y compartir ---------- */
+const BULK_LABEL={embalar:'Embalado',despachar:'Despachado'};
+async function bulk(key){
+  const data=[], changed=[];
+  for(const k of S.sel){
+    const [si,row]=k.split(':').map(Number); const D=S.data[si]; const it=findItem(si,row); if(!it) continue;
+    const c=D.cols[key]; if(c<0||ok(it,c)) continue;
+    const sh=SHEETS[si]; data.push({range:`'${sh.name}'!${colLetter(c)}${row}`,values:[[true]]});
+    const fe=D.cols.fenvio; let fv;
+    if(key==='despachar'&&fe>=0&&!String(it.v[fe]).trim()){ fv=D.dateMode==='serial'?hoySerial():hoyTexto(); data.push({range:`'${sh.name}'!${colLetter(fe)}${row}`,values:[[fv]]}) }
+    changed.push({si,row,c,fe:fv!==undefined?fe:-1,old:[...it.raw],oldv:[...it.v]});
+    it.raw[c]=true; it.v[c]='TRUE';
+    if(fv!==undefined){ it.raw[fe]=fv; it.v[fe]=typeof fv==='number'?hoyTexto():fv }
+  }
+  if(!changed.length){ toast('Ya estaban marcados'); return }
+  S.sel.clear(); S.selMode=false; render({keep:true});
+  try{
+    await api('/values:batchUpdate',{method:'POST',body:JSON.stringify({valueInputOption:'USER_ENTERED',data})});
+    notifyBadge();
+    toastAct(`✓ ${changed.length} pedidos: ${BULK_LABEL[key]}`,'Deshacer',async()=>{
+      const back=[];
+      for(const ch of changed){
+        const D=S.data[ch.si], it=findItem(ch.si,ch.row), sh=SHEETS[ch.si];
+        back.push({range:`'${sh.name}'!${colLetter(ch.c)}${ch.row}`,values:[[false]]});
+        if(ch.fe>=0) back.push({range:`'${sh.name}'!${colLetter(ch.fe)}${ch.row}`,values:[['']]});
+        it.raw=[...ch.old]; it.v=[...ch.oldv];
+      }
+      try{ await api('/values:batchUpdate',{method:'POST',body:JSON.stringify({valueInputOption:'USER_ENTERED',data:back})}); render({keep:true}); notifyBadge(); toast('Deshecho') }
+      catch(e){ toast('No se pudo deshacer: '+e.message,4000) }
+    });
+  }catch(e){
+    for(const ch of changed){ const it=findItem(ch.si,ch.row); it.raw=ch.old; it.v=ch.oldv }
+    render({keep:true}); toast('No se pudo guardar: '+e.message,4500);
+  }
+}
+function shareList(){
+  const tab=S.view==='home'?ALL:S.tab;
+  const rows=[];
+  SHEETS.forEach((s,si)=>{ const D=S.data[si]; if(!D||(tab!==ALL&&tab!==si)) return;
+    for(const it of D.items){ if(inWindow(it)&&stage(it,D)==='emb') rows.push({si,D,it}) } });
+  if(!rows.length){ toast('No hay pedidos para embalar'); return }
+  const by={}; rows.forEach(r=>{ const k=tipo(r.it,r.D); (by[k]=by[k]||[]).push(r) });
+  let txt=`PARA EMBALAR (${rows.length}) — ${hoyTexto()}\n`;
+  Object.keys(by).sort().forEach(k=>{ txt+=`\n${k} (${by[k].length})\n`; by[k].forEach(r=>{ txt+=`• ${r.D.cols.diseno>=0?r.it.v[r.D.cols.diseno]:''} — ${r.D.cols.cliente>=0?r.it.v[r.D.cols.cliente]:''} [${SHEETS[r.si].short} fila ${r.it.row}]\n` }) });
+  if(navigator.share){ navigator.share({title:'Para embalar',text:txt}).catch(()=>{}) }
+  else if(navigator.clipboard){ navigator.clipboard.writeText(txt).then(()=>toast('Lista copiada')) }
+  else toast('No se pudo compartir');
 }
 
 /* ---------- Asistente de voz ---------- */
@@ -581,13 +667,20 @@ document.addEventListener('click',async e=>{
   const tabEl=t.closest('[data-tab]'); if(tabEl){S.tab=+tabEl.dataset.tab;S.limit=60;S.focusQ=false;render({keep:true});return}
   const fl=t.closest('[data-f]'); if(fl){S.filter=fl.dataset.f;S.limit=60;S.focusQ=false;render({keep:true});return}
   const dy=t.closest('[data-days]'); if(dy){S.days=+dy.dataset.days;ls.set('days',S.days);render({keep:true});notifyBadge();return}
+  const sl=t.closest('[data-sel]'); if(sl){const k=sl.dataset.sel; S.sel.has(k)?S.sel.delete(k):S.sel.add(k); render({keep:true}); return}
+  const bk=t.closest('[data-bulk]'); if(bk){bulk(bk.dataset.bulk);return}
   const tg=t.closest('[data-t]'); if(tg){const [si,r,c]=tg.dataset.t.split(':').map(Number);toggle(si,r,c);return}
   const ed=t.closest('[data-e]'); if(ed){const [si,r]=ed.dataset.e.split(':').map(Number);openEdit(si,r);return}
   if(t.id==='mic'){openVoice();return}
   if(t.id==='vhab'){startListen(false);return}
   if(t.id==='vcl'||t.id==='voice'){$('#voice').classList.remove('on');return}
   if(t.id==='tact'){ $('#toast').style.display='none'; const f=window.__undo; window.__undo=null; if(f) f(); return }
-  const ac=t.closest('[data-act]'); if(ac){ if(ac.dataset.act==='reload') loadAll(); if(ac.dataset.act==='notif') askNotif(); return}
+  const ac=t.closest('[data-act]'); if(ac){ if(ac.dataset.act==='reload') loadAll(); if(ac.dataset.act==='notif') askNotif();
+    if(ac.dataset.act==='share') shareList();
+    if(ac.dataset.act==='group'){S.group=!S.group;ls.set('group',S.group?'1':'0');render({keep:true})}
+    if(ac.dataset.act==='select'){S.selMode=!S.selMode;S.sel.clear();render({keep:true})}
+    if(ac.dataset.act==='selall'){S.visible.forEach(k=>S.sel.add(k));render({keep:true})}
+    return}
   if(t.id==='more'){S.limit+=60;render({keep:true});return}
   if(t.id==='lo'){token=null;tokenExp=0;ls.set('signed','');ls.set('tok','');render();return}
   if(t.id==='cx'||t.id==='sheet'){$('#sheet').classList.remove('on');return}

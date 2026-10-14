@@ -210,6 +210,11 @@ button.fl{padding:7px 11px;font-size:12.5px}
 .sbtn{width:36px;height:36px;border-radius:12px;border:0;background:var(--peach-l);color:var(--coral-d);font-size:20px;font-weight:800}
 .snum{min-width:46px;height:36px;border-radius:12px;border:0;background:#F6F0EB;font-size:17px;font-weight:800;color:var(--ink)}
 .qinput{width:100%;box-sizing:border-box;font-size:28px;font-weight:800;text-align:center;border:2px solid var(--peach);border-radius:16px;padding:12px;font-family:inherit}
+.brandlogo{background:none;border:0;padding:0;display:flex}.brandlogo img{width:36px;height:36px;border-radius:50%}
+.msw{display:flex;align-items:center;gap:6px}.msw .car{font-style:normal;font-size:15px;color:var(--coral-d)}
+.top{position:relative}
+.mdd{position:absolute;top:50px;left:0;background:#fff;border-radius:16px;box-shadow:0 12px 40px rgba(58,52,49,.28);padding:6px;z-index:30;min-width:210px}
+.mdd button{display:block;width:100%;text-align:left;background:none;border:0;padding:12px 14px;border-radius:12px;font-size:15px;font-weight:600;color:var(--ink)}.mdd button.on{background:var(--peach-l);color:var(--coral-d)}
 </style>
 </head>
 <body>
@@ -589,6 +594,7 @@ function renderPStart(){
   return `<div class="hello">Producción<b>Stock e inventario</b></div>
   <div class="kpis"><div class="kpi main"><span>Unidades en stock</span><b>${tot}</b></div><div class="kpi"><span>Productos con stock</span><b>${it.filter(x=>x.stock>0).length}</b></div></div>
   ${low.length?`<div class="sec">⚠ Para reponer (punto de pedido)</div><div class="ch"><div class="olist">${low.map(x=>`<button class="orow1" data-sk="${x.row}"><span class="nm"><b>${esc(x.prod)}</b><em>${esc(x.code)} · punto de pedido ${x.pp}</em></span><span class="tp">${x.stock}</span><i>›</i></button>`).join('')}</div></div>`:'<div class="alert" style="margin-top:12px">✓ Nada por debajo del punto de pedido.</div>'}
+  <div style="margin:12px 2px"><button class="chip on" data-act="syncCat">↻ Sincronizar con el catálogo de productos</button></div>
   <div class="sec">Stock por categoría</div><div class="ch"><ul style="margin:0">${Object.entries(byCat).map(([k,v])=>`<li><span>${esc(k)}</span><i>${v}</i></li>`).join('')}</ul></div>`;
 }
 function openQty(row,mode){
@@ -645,6 +651,41 @@ async function runStockCommand(text){
   if(!cands.length) return renderVoice(`Escuché: “${text}”. No encontré ese producto.`);
   if(cands.length>1) return renderVoice(`Escuché: “${text}”. Hay varios: `+cands.slice(0,6).map(x=>`${x.prod} (${x.code})`).join(' | ')+'. Decilo más específico.');
   try{ await stockAdjust(cands[0],mode,n); $('#voice').classList.remove('on') }catch(e){ renderVoice('No se pudo guardar: '+e.message) }
+}
+
+
+const LEGACY={"Alfombras|rainbow": "A-00001-AL", "Alfombras|espacio": "A-00002-AL", "Alfombras|zoo": "A-00003-AL", "Alfombras|ciudad": "A-00004-AL", "Alfombras|pink": "A-00005-AL", "Alfombras|blue": "A-00006-AL", "Alfombras|abc animales": "A-00007-AL", "Individuales|acuarela": "I-00001-IN", "Individuales|floral": "I-00002-IN", "Individuales|líneas blanco y negro": "I-00003-IN", "Individuales|líneas amarillo": "I-00004-IN", "Individuales|líneas rosa pastel": "I-00005-IN", "Individuales|minimal": "I-00006-IN", "Individuales|natural": "I-00007-IN", "Individuales|terrazo mono": "I-00008-IN", "Individuales|abstracto": "I-00009-IN", "Posavasos|acuarela": "I-00001-PO", "Posavasos|floral": "I-00002-PO", "Posavasos|líneas blanco y negro": "I-00003-PO", "Posavasos|líneas amarillo": "I-00004-PO", "Posavasos|líneas rosa": "I-00005-PO", "Posavasos|minimal": "I-00006-PO", "Posavasos|natural": "I-00007-PO", "Posavasos|terrazo mono": "I-00008-PO", "Posavasos|abstracto": "I-00009-PO", "Pads|terrazo": "P-00001-PA", "Pads|spinetta": "P-00002-PA", "Pads|britto": "P-00003-PA", "Pads|beach": "P-00004-PA", "Pads|mandala rosa": "P-00005-PA", "Pads|justin bieber": "P-00006-PA", "Pads|harry styles": "P-00007-PA", "Pads|harry potter": "P-00008-PA", "Pads|friends": "P-00009-PA", "Pads|paisaje": "P-00010-PA", "Pads|coldplay": "P-00011-PA", "Pads|queen": "P-00012-PA", "Pads|purple marble": "P-00013-PA", "Pads|pink marble": "P-00014-PA", "Pads|black marble": "P-00015-PA", "Pads|game of thrones": "P-00016-PA", "Pads|trazos": "P-00017-PA", "Pads|cerati": "P-00018-PA", "Pads|begonia coral": "P-00019-PA", "Pads|the beatles": "P-00020-PA", "Pads|breaking bad": "P-00021-PA"};
+function nrm2(x){ return norm(String(x||'')).replace(/[^a-z0-9]/g,'') }
+async function syncCatalog(){
+  toast('Leyendo el catálogo…',3000);
+  try{
+    const r=await api('/values/'+encodeURIComponent("'Catálogo de Productos'!A1:T17450")+'?valueRenderOption=FORMATTED_VALUE');
+    const V=r.values||[]; const h=V.findIndex(x=>x[0]==='Producto'); if(h<0) throw new Error('No encontré el encabezado del catálogo');
+    const items=[], seen=new Set(), cnt={};
+    for(const x of V.slice(h+1)){
+      const fam=String(x[0]||'').trim(); if(!fam||fam==='Cuadros') continue;
+      const par=/variantes\s*↓/i.test(String(x[3]||'')); if(par) continue;
+      const design=String(x[1]||'').trim(), cat=String(x[2]||'').trim();
+      const det=[x[3],x[4],x[5],x[6]].map(v=>String(v||'').trim()).filter(v=>v&&v!=='Única').join(' · ');
+      let code=String(x[7]||'').trim();
+      if(!code){ code=LEGACY[fam+'|'+nrm2(design)]||''; if(code&&/^P-|^A-|^I-/.test(code)&&det) code=code+'-'+nrm2(det).toUpperCase().slice(0,6) }
+      if(!code){ cnt[fam]=(cnt[fam]||0)+1; code=fam.slice(0,3).toUpperCase()+'-'+String(cnt[fam]).padStart(3,'0')+'-'+nrm2(design).toUpperCase().slice(0,6)+(det?'-'+nrm2(det).toUpperCase().slice(0,5):'') }
+      let c=code,k=2; while(seen.has(c)){ c=code+'-'+k++ } seen.add(c);
+      items.push([c,fam,design,[cat,det].filter(Boolean).join(' · ')]);
+    }
+    const MATS=[['MDF','Vinilo sobre MDF'],['CAN','Tela Canvas'],['MYV','Con marco Kiri']];
+    for(const sz of ['S','M','L','XL']) for(const [m,n] of MATS) items.push(['CUA-'+sz+'-'+m,'Cuadros','Cuadro '+sz+' · '+n,'Cuadros']);
+    for(const sz of ['XXL','XXXL']) items.push(['CUA-'+sz+'-CAN','Cuadros','Cuadro '+sz+' · Tela Canvas','Cuadros']);
+    const old=new Map(S.stock.items.map(x=>[x.code,x]));
+    const rows=items.map(it=>{ const o=old.get(it[0]); return [it[0],it[1],it[2],it[3],o?o.stock:0,(o&&o.pp!==null)?o.pp:'',o&&o.aviso?'SI':'NO',o?o.upd:''] });
+    const codes=new Set(items.map(i=>i[0]));
+    S.stock.items.filter(o=>!codes.has(o.code)&&o.stock>0).forEach(o=>rows.push([o.code,o.cat,o.prod,(o.sub||'')+' (fuera del catálogo)',o.stock,o.pp===null?'':o.pp,o.aviso?'SI':'NO',o.upd]));
+    const t=S.stock.title||'Hoja 1';
+    await api('/values:batchClear',{method:'POST',base:STOCK_API,body:JSON.stringify({ranges:["'"+t+"'!A2:H1500"]})});
+    await api('/values:batchUpdate',{method:'POST',base:STOCK_API,body:JSON.stringify({valueInputOption:'USER_ENTERED',data:[{range:"'"+t+"'!A2:H"+(rows.length+1),values:rows}]})});
+    toast('✓ Catálogo sincronizado: '+rows.length+' productos',4500);
+    await loadStock();
+  }catch(e){ toast('No se pudo sincronizar: '+e.message,6000) }
 }
 
 /* ---------- Ajustes (se guardan en este dispositivo) ---------- */
@@ -786,7 +827,7 @@ function cardHTML(si,D,it){
     <span class="tipo">${esc(t)}</span>
     ${D.cols.notas>=0&&it.v[D.cols.notas]?`<div class="note">📝 ${g(D.cols.notas)}</div>`:''}
     ${D.cols.enviar>=0&&it.v[D.cols.enviar]?`<div class="note">🚚 ${g(D.cols.enviar)}</div>`:''}
-    ${S.selMode?'':`${dotsLine(si,it.row,null)}`}</article>`;
+    </article>`;
 }
 
 const HTITLE={emb:'Para embalar',desp:'Embalados, sin despachar',prod:'En producción',late:'Demorados',nopago:'Sin pago',canc:'Cancelados',hoy:'Despachados hoy'};
@@ -873,7 +914,7 @@ function renderHome(){
       return `<div class="sec">${HTITLE[fk]} por planilla</div>`+L.map(l=>{
         const D=S.data[l.si];
         return `<div class="ch"><div class="r"><b>${SHEETS[l.si].label}</b><span class="n">${l.items.length}</span></div>`+
-          (l.items.length?`<div class="olist">${[...l.items].sort((a,b)=>{const ta=tipo(a,D),tb=tipo(b,D);return ta<tb?-1:ta>tb?1:((a.date?+a.date:0)-(b.date?+b.date:0))}).map(it=>`<button class="orow1" data-sw="${l.si}:${it.row}" data-o="${l.si}:${it.row}"><span class="tp">${esc(tipo(it,D))}</span><span class="nm"><b>${esc(it.v[D.cols.cliente]||'(sin nombre)')}</b><em>${esc(setsOf(it,D).map(x=>x.design).join(' + '))}</em>${dotsLine(l.si,it.row,null)}</span><small>${FDATE(it.date)}</small><i>›</i></button>`).join('')}</div>`:'<div class="note">Nada en esta lista</div>')+
+          (l.items.length?`<div class="olist">${[...l.items].sort((a,b)=>{const ta=tipo(a,D),tb=tipo(b,D);return ta<tb?-1:ta>tb?1:((a.date?+a.date:0)-(b.date?+b.date:0))}).map(it=>`<button class="orow1" data-sw="${l.si}:${it.row}" data-o="${l.si}:${it.row}"><span class="tp">${esc(tipo(it,D))}</span><span class="nm"><b>${esc(it.v[D.cols.cliente]||'(sin nombre)')}</b><em>${esc(setsOf(it,D).map(x=>x.design).join(' + '))}</em></span><small>${FDATE(it.date)}</small><i>›</i></button>`).join('')}</div>`:'<div class="note">Nada en esta lista</div>')+
           `</div>`;
       }).join('');
     },
@@ -881,7 +922,7 @@ function renderHome(){
       const fk=S.hf||'emb', g={};
       homeList(fk).forEach(l=>{ const D=S.data[l.si]; l.items.forEach(it=>setsOf(it,D).forEach(x=>{ (g[x.tipo]=g[x.tipo]||[]).push({si:l.si,it,design:x.design,D,i:setsOf(it,D).indexOf(x)}) })) });
       const keys=Object.keys(g).sort((a,b)=>g[b].length-g[a].length); if(!keys.length) return '';
-      return `<div class="sec">Total ${HTITLE[fk].toLowerCase()} por tamaño y formato</div>`+keys.map(k=>`<div class="ch"><div class="th"><span>${esc(k)}</span><i>${g[k].length}</i></div><div class="olist">${g[k].map(x=>`<button class="orow1" data-sw="${x.si}:${x.it.row}:${x.i}" data-o="${x.si}:${x.it.row}"><span class="nm"><b>${esc(x.it.v[x.D.cols.cliente]||'(sin nombre)')}</b><em>${esc(x.design)}</em>${dotsLine(x.si,x.it.row,x.i)}</span><span class="src">${SHEETS[x.si].short}</span><small>${FDATE(x.it.date)}</small><i>›</i></button>`).join('')}</div></div>`).join('');
+      return `<div class="sec">Total ${HTITLE[fk].toLowerCase()} por tamaño y formato</div>`+keys.map(k=>`<div class="ch"><div class="th"><span>${esc(k)}</span><i>${g[k].length}</i></div><div class="olist">${g[k].map(x=>`<button class="orow1" data-sw="${x.si}:${x.it.row}:${x.i}" data-o="${x.si}:${x.it.row}"><span class="nm"><b>${esc(x.it.v[x.D.cols.cliente]||'(sin nombre)')}</b><em>${esc(x.design)}</em></span><span class="src">${SHEETS[x.si].short}</span><small>${FDATE(x.it.date)}</small><i>›</i></button>`).join('')}</div></div>`).join('');
     },
     period:()=>`${perUI()}
       <div class="note">Para embalar = Imp, Prep Vin y Pegar tildados, sin Embalar ni cancelar.${S.loadedAt?` · Actualizado ${new Date(S.loadedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}`:''}</div>`
@@ -973,8 +1014,8 @@ function render(opt={}){
   const home=S.view==='home';
   if(S.view!=='sheets') S.selMode=false;
   $('#app').innerHTML=`<header><div class="top">
-      <button class="brand" data-view="${prod?'pstart':'home'}" aria-label="Inicio"><img src="jk-192.png" alt="Jake"><b>${esc(modName(S.mod))}</b></button>
-      <button class="ibtn" data-act="modsw" title="Cambiar de sección" aria-label="Cambiar de sección" style="margin-left:6px">⇄</button>
+      <button class="brandlogo" data-view="${prod?'pstart':'home'}" aria-label="Inicio"><img src="jk-192.png" alt="Jake"></button>
+      <button class="brand msw" data-act="modsw" aria-label="Cambiar de sección"><b>${esc(modName(S.mod))}</b><i class="car">▾</i></button>
       <button class="ibtn wand" data-act="tour" title="Guía paso a paso" aria-label="Guía paso a paso" style="margin-left:auto">🪄</button>
       </div>
     </header>
@@ -1001,8 +1042,8 @@ function openOrder(si,row){
   const nt=D.cols.notas>=0?it.v[D.cols.notas]:'';
   $('#sp').innerHTML=`<div class="ohead"><div><div class="ow">${esc(it.v[D.cols.cliente]||'(sin nombre)')}</div><div class="od">${it.date?'📅 '+FDATE(it.date)+' · '+ageTxt(it.date):'Sin fecha'}</div></div><span class="src">${SHEETS[si].short} #${row}</span></div>
   <div class="popsec" style="margin-top:6px">${multi?'Sets del pedido':'Pedido'} · deslizá → marcar · ← desmarcar</div>
-  <div class="sets">${sets.map((x,k)=>`<div class="setbox" data-sw="${si}:${row}:${k}"><div class="setrow"><span class="tipo">${esc(x.tipo)}</span><b>${esc(x.design)}</b></div>${dotsLine(si,row,multi?k:null)}</div>`).join('')}
-  ${multi?`<div class="setbox full" data-sw="${si}:${row}"><div class="setrow"><b>Pedido completo · ${esc(it.v[D.cols.cliente]||'')}</b></div>${dotsLine(si,row,null)}</div>`:''}</div>
+  <div class="sets">${sets.map((x,k)=>`<div class="setbox" data-sw="${si}:${row}:${k}"><div class="setrow"><span class="tipo">${esc(x.tipo)}</span><b>${esc(x.design)}</b></div></div>`).join('')}
+  ${multi?`<div class="setbox full" data-sw="${si}:${row}"><div class="setrow"><b>Pedido completo · ${esc(it.v[D.cols.cliente]||'')}</b></div></div>`:''}</div>
   ${D.cols.enviar>=0&&it.v[D.cols.enviar]?`<div class="note">🚚 ${esc(it.v[D.cols.enviar])}</div>`:''}
   ${nt?`<div class="note">📝 ${esc(nt)}</div>`:''}
   <div class="row"><button class="sec2" id="cx">Cerrar</button><button class="sec2" data-gopedido="${si}:${row}">Ver en Pedidos</button><button class="pri" data-e="${si}:${row}">Editar todo</button></div>`;
@@ -1298,7 +1339,8 @@ document.addEventListener('click',async e=>{
   const lt=t.closest('[data-late]'); if(lt){ S.late=+lt.dataset.late; ls.set('late',S.late); render({keep:true}); notifyBadge(); return }
   const gp=t.closest('[data-gopedido]'); if(gp){ const [si,r]=gp.dataset.gopedido.split(':').map(Number); const it=findItem(si,r); $('#sheet').classList.remove('on'); S.view='sheets';S.tab=si;S.filter='todos';S.q=String(it.v[S.data[si].cols.cliente]||'');S.limit=60;S.focusQ=false;render({top:true});return }
   const po=t.closest('[data-o]'); if(po){const [si,r]=po.dataset.o.split(':').map(Number);openOrder(si,r);return}
-  const msw=t.closest('[data-setmod]'); if(msw){ S.mod=msw.dataset.setmod; ls.set('mod',S.mod); $('#sw2').classList.remove('on'); S.view=S.mod==='prod'?'pstart':'home'; render({top:true}); if(S.mod==='prod'&&!S.stock.loaded) loadStock(); return }
+  if(!t.closest('#mdd')&&!t.closest('.msw')){ const dd=document.getElementById('mdd'); if(dd) dd.remove() }
+  const msw=t.closest('[data-setmod]'); if(msw){ S.mod=msw.dataset.setmod; ls.set('mod',S.mod); const dd=document.getElementById('mdd'); if(dd) dd.remove(); S.view=S.mod==='prod'?'pstart':'home'; render({top:true}); if(S.mod==='prod'&&!S.stock.loaded) loadStock(); return }
   const sad=t.closest('[data-sadj]'); if(sad){ const [r,d]=sad.dataset.sadj.split(':').map(Number); const it=S.stock.items.find(x=>x.row===r); try{ await stockAdjust(it,d>0?'add':'sub',1) }catch(er){ toast(er.message,4500) } return }
   const sst=t.closest('[data-sset]'); if(sst){ openQty(+sst.dataset.sset,'set'); return }
   const sk=t.closest('[data-sk]'); if(sk){ openItem(+sk.dataset.sk); return }
@@ -1326,7 +1368,8 @@ document.addEventListener('click',async e=>{
   const ac=t.closest('[data-act]'); if(ac){ if(ac.dataset.act==='reload'){ if(S.mod==='prod') loadStock(); else loadAll() } if(ac.dataset.act==='notif') askNotif();
     if(ac.dataset.act==='share') shareList();
     if(ac.dataset.act==='install') doInstall();
-    if(ac.dataset.act==='modsw'){ $('#sw2p').innerHTML=`<div class="ow" style="margin-bottom:10px">Cambiar de sección</div><div class="tg">${Object.keys(MODS).map(k=>`<button class="${S.mod===k?'on':''}" data-setmod="${k}">${k==='prod'?'📦 ':'📋 '}${esc(modName(k))}</button>`).join('')}</div><div class="note" style="margin-top:10px">Cada sección usa su propia planilla.</div><div class="row"><button class="pri" id="sw2x">Cerrar</button></div>`; $('#sw2').classList.add('on') }
+    if(ac.dataset.act==='syncCat') syncCatalog();
+    if(ac.dataset.act==='modsw'){ const old=document.getElementById('mdd'); if(old){ old.remove(); return } const d=document.createElement('div'); d.id='mdd'; d.className='mdd'; d.innerHTML=Object.keys(MODS).map(k=>`<button class="${S.mod===k?'on':''}" data-setmod="${k}">${k==='prod'?'📦':'📋'} ${esc(modName(k))}${S.mod===k?' ✓':''}</button>`).join(''); document.querySelector('header .top').appendChild(d); return }
     if(ac.dataset.act==='defper'){ CFG.defPer=JSON.parse(JSON.stringify(S.per)); cfgSave(); toast('Predeterminado: '+perLabel()); render({keep:true}) }
     if(ac.dataset.act==='popup'){ showPopup() }
     if(ac.dataset.act==='perOpen'){ S.perOpen=!S.perOpen; render({keep:true}) }
@@ -1376,7 +1419,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v23';
+const APP_V='v24';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

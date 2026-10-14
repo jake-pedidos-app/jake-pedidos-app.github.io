@@ -337,7 +337,7 @@ async function loadAll(){
     S.loadedAt=Date.now();
   }catch(e){S.err=e.message;toast(e.message,4500)}
   S.loading=false; render(); notifyBadge(); notifyIfNeeded();
-  if(CFG.popup&&!S.popShown&&S.data[0]&&!S.err){ S.popShown=1; showPopup() }
+  if(CFG.popup&&!S.popShown&&S.data[0]&&!S.err){ S.popShown=1; const td=new Date().toDateString(); if(ls.get('popDay')!==td){ ls.set('popDay',td); showPopup() } }
 }
 
 /* ---------- Reglas ---------- */
@@ -368,7 +368,6 @@ function perUI(){
   <div class="chips pc">${pre.map(([k,l])=>{const [kk,nn]=k.split(':');return `<button class="chip ${on(kk,nn?+nn:undefined)}" data-per="${k}">${l}</button>`}).join('')}<button class="chip ${custom||S.perOpen?'on':''}" data-act="perOpen">✎ Personalizar</button></div>
   ${(S.perOpen||custom)?`<div class="perx"><label>Últimos <input type="number" min="1" id="pn" value="${p.k==='n'?p.n:''}" placeholder="N"> días</label></div>
   <div class="perx"><label>Desde <input type="date" id="pf" value="${p.k==='custom'?p.from||'':''}"></label><label>hasta <input type="date" id="pt" value="${p.k==='custom'?p.to||'':''}"></label></div>`:''}
-  <div class="pernd"><span>Predeterminado al abrir: <b>${perLabelOf(CFG.defPer)}</b></span><button class="chip ${JSON.stringify(CFG.defPer)===JSON.stringify(S.per)?'on':''}" data-act="defper">★ Usar este</button></div>
   <div class="pernd"><span>Ignorar pedidos sin fecha</span><button class="sw2 ${CFG.nodate?'on':''}" data-cfg="nodate:1"></button></div></div>`;
 }
 function setPer(o){ S.per=o; ls.set('per',JSON.stringify(o)); render({keep:true}); notifyBadge() }
@@ -680,7 +679,8 @@ function renderConfig(){
   <div class="setcard">${SHEETS.map((s,i)=>`<div class="cfgrow"><span>${s.label}</span>${sw(CFG.sheets[i],`data-cfg="sheet:${i}"`)}</div>`).join('')}</div>
   <div class="sec">Reglas</div>
   <div class="setcard">
-    <div class="cfgrow" style="display:block">${perUI()}</div>
+    <div class="cfgrow" style="display:block"><span>Período predeterminado al abrir la app: <b>${perLabelOf(CFG.defPer)}</b></span><div class="chips">${[['today','Hoy'],['d3','3 días'],['week','Esta semana'],['month','Este mes'],['n:30','30 días'],['n:60','60 días'],['n:90','90 días'],['all','Todo']].map(([k,l])=>{const [kk,nn]=k.split(':');const o=nn?{k:kk,n:+nn}:{k:kk};return `<button class="chip ${JSON.stringify(o)===JSON.stringify(CFG.defPer)?'on':''}" data-defper="${k}">${l}</button>`}).join('')}</div>
+      <div class="pernd" style="border:0"><span>Ignorar pedidos sin fecha</span><button class="sw2 ${CFG.nodate?'on':''}" data-cfg="nodate:1"></button></div></div>
     <div class="cfgrow" style="display:block"><span>Un pedido está demorado después de</span><div class="chips">${[3,5,7,10,14].map(d=>`<button class="chip ${S.late===d?'on':''}" data-late="${d}">${d} días</button>`).join('')}</div></div>
     <div class="cfgrow"><span>Agrupar por tamaño en "Para embalar"</span>${sw(S.group,'data-cfg="group:1"')}</div>
     <div class="cfgrow" style="display:block"><span>Abrir la app en</span><div class="chips"><button class="chip ${CFG.start==='home'?'on':''}" data-cfg="start:home">Inicio</button><button class="chip ${CFG.start==='sheets'?'on':''}" data-cfg="start:sheets">Pedidos</button></div></div>
@@ -1037,6 +1037,7 @@ document.addEventListener('click',async e=>{
   const t=e.target;
   const v=t.closest('[data-view]'); if(v){S.view=v.dataset.view;S.focusQ=false;render({top:true});return}
   const pg=t.closest('[data-popgo]'); if(pg){ $('#sheet').classList.remove('on'); S.view='sheets';S.tab=ALL;S.filter='emb';S.q='';S.limit=60;S.focusQ=false;render({top:true});return }
+  const dp=t.closest('[data-defper]'); if(dp){ const [k,n]=dp.dataset.defper.split(':'); CFG.defPer=n?{k,n:+n}:{k}; cfgSave(); toast('Predeterminado: '+perLabelOf(CFG.defPer)); render({keep:true}); return }
   const hf=t.closest('[data-hf]'); if(hf){ const k=hf.dataset.hf; S.hf=(S.hf===k&&k!=='emb')?'emb':k; render({keep:true}); return }
   const gf=t.closest('[data-go]'); if(gf){S.view='sheets';S.tab=ALL;S.filter=gf.dataset.go;S.q='';S.limit=60;S.focusQ=false;render({top:true});return}
   const gt=t.closest('[data-go-tab]'); if(gt){S.view='sheets';S.tab=+gt.dataset.goTab;S.filter=(gt.dataset.gof&&gt.dataset.gof!=='hoy')?gt.dataset.gof:(gt.dataset.gof==='hoy'?'todos':'emb');S.q='';S.limit=60;S.focusQ=false;render({top:true});return}
@@ -1108,7 +1109,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v18';
+const APP_V='v19';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

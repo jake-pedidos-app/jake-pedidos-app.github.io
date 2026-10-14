@@ -88,7 +88,7 @@ nav button.on{color:var(--coral-d)}
 #sheet,#voice{position:fixed;inset:0;background:rgba(58,52,49,.45);display:none;z-index:10;align-items:center;justify-content:center;padding:16px;box-sizing:border-box}
 #sheet.on,#voice.on{display:flex}
 #sheet .p,#voice .p{background:#fff;width:100%;max-width:440px;max-height:86vh;overflow:auto;border-radius:26px;padding:20px 18px;box-shadow:0 20px 60px rgba(0,0,0,.35)}
-#voice .p{max-height:none}
+#voice{inset:auto;left:12px;right:12px;bottom:84px;background:#fff;border-radius:20px;padding:14px 16px;box-shadow:0 8px 30px rgba(0,0,0,.25);z-index:12;display:none;flex-direction:column;align-items:stretch;justify-content:flex-start}#voice.on{display:flex}#voice .p{box-shadow:none;padding:0;border-radius:0;max-height:none;overflow:visible}#voice .vs{font-size:12px;font-weight:800;letter-spacing:.04em;text-transform:uppercase;color:var(--coral,#d9534f);margin-bottom:4px;display:flex;justify-content:space-between}#voice .vs button{background:none;border:0;font-size:16px;color:#999}#voice .vt{font-size:15px;line-height:1.35}#voice .vh{font-size:12.5px;color:#8a817b;margin-top:6px}#mic.rec{background:#c0392b;animation:pulse 1s infinite}@keyframes pulse{50%{transform:scale(1.12)}}
 .f{margin:12px 0}
 .f label{display:block;font-size:12px;color:var(--mut);margin-bottom:4px;font-weight:600}
 .f input[type=text],.f textarea{width:100%;padding:11px 12px;border:1px solid var(--line);border-radius:12px;font-size:16px;font-family:inherit;background:#fff;color:var(--ink)}
@@ -219,7 +219,7 @@ button.fl{padding:7px 11px;font-size:12.5px}
 .orow1.st-sent,.orow1.st-pack,.orow1.st-pend,.orow1.st-canc{border-radius:14px;margin-bottom:6px;padding-left:10px;padding-right:10px;border:0}
 .legend{display:flex;gap:6px;flex-wrap:wrap;margin:0 2px 8px}.lg{font-size:11.5px;font-weight:700;border-radius:999px;padding:3px 10px;color:var(--ink)}.lg.st-sent{background:#BFE5CC}.lg.st-pack{background:#E3F3E9}.lg.st-pend{background:#FFF0D2}
 .swh2{display:flex;align-items:center;padding:0 16px;font-size:14px;font-weight:800;color:var(--ink);pointer-events:none}.swh2.mk{background:#CDEBDB}.swh2.um{background:#F9C9C2}
-.dsum{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#fff;border-radius:16px;padding:12px 14px;margin:0 0 12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}.dsum b{font-size:15px}.dsum span{font-size:13px;font-weight:700;color:var(--coral,#d9534f)}.ono{font-size:12px;font-weight:700;color:var(--coral,#d9534f);margin-left:4px}.lgd{width:16px;height:16px;border-radius:50%;border:0;padding:0}.lgd.st-sent{background:#BFE5CC}.lgd.st-pack{background:#E3F3E9;box-shadow:inset 0 0 0 1px #b9d9c4}.lgd.st-pend{background:#FFF0D2;box-shadow:inset 0 0 0 1px #ecd9a8}.lgd.st-warn{background:#FFD9B8}
+.dsum{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#fff;border-radius:16px;padding:12px 14px;margin:0 0 12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}.dsum b{font-size:15px}.dsum span{font-size:13px;font-weight:700;color:var(--coral,#d9534f)}.ono{font-size:12px;font-weight:700;color:var(--coral,#d9534f);margin-left:4px}.orow1 .nm b,.orow1 .nm em{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.orow1 .nm{min-width:0;flex:1}.lgd{width:16px;height:16px;border-radius:50%;border:0;padding:0}.lgd.st-sent{background:#BFE5CC}.lgd.st-pack{background:#E3F3E9;box-shadow:inset 0 0 0 1px #b9d9c4}.lgd.st-pend{background:#FFF0D2;box-shadow:inset 0 0 0 1px #ecd9a8}.lgd.st-warn{background:#FFD9B8}
 .orow1.st-warn{background:#FFD9B8;border-radius:14px;margin-bottom:6px;padding-left:10px;padding-right:10px;border:0}.lg.st-warn{background:#FFD9B8}
 </style>
 </head>
@@ -312,6 +312,8 @@ function parseDateWords(str){
   if(/\bmanana\b/.test(t)) return new Date(d0.getTime()+86400000);
   let m=t.match(/(\d{1,2})\s*[\/\-.]\s*(\d{1,2})(?:\s*[\/\-.]\s*(\d{2,4}))?/);
   if(m){ let y=m[3]?+m[3]:now.getFullYear(); if(y<100)y+=2000; return new Date(y,+m[2]-1,+m[1]) }
+  m=t.match(/(?:^|\D)(\d{1,2})\s*(?:de|del)?\s+(\d{1,2})(?:\D|$)/);
+  if(m&&+m[1]<=31&&+m[2]<=12){ return new Date(now.getFullYear(),+m[2]-1,+m[1]) }
   m=t.match(/(\d{1,2})\s*(?:de\s*)?(enero|febrero|marzo|abril|mayo|junio|julio|agosto|septiembre|setiembre|octubre|noviembre|diciembre)(?:\s*(?:de\s*)?(\d{2,4}))?/);
   if(m){ const mi=MESES.indexOf(m[2]==='setiembre'?'septiembre':m[2]); let y=m[3]?+m[3]:now.getFullYear(); if(y<100)y+=2000; return new Date(y,mi,+m[1]) }
   m=t.match(/hace\s*(\d{1,3})\s*dias?/); if(m) return new Date(d0.getTime()-(+m[1])*86400000);
@@ -384,6 +386,8 @@ async function loadAll(silent){
 }
 
 /* ---------- Reglas ---------- */
+const recent=it=>it.date?(Date.now()-it.date.getTime())<=30*86400000:!CFG.nodate;
+const ONO=(it,D)=>{ const o=D.cols.orden>=0?String(it.v[D.cols.orden]||'').trim():''; return o?'#'+esc(o)+' · ':'' };
 const NM=(it,D)=>{ const n=esc(it.v[D.cols.cliente]||'(sin nombre)'); const o=D.cols.orden>=0?String(it.v[D.cols.orden]||'').trim():''; return n+(o?` <span class="ono">#${esc(o)}</span>`:'') };
 const ok = (it,c)=>c>=0&&(it.raw[c]===true||it.v[c]==='TRUE');
 function isCancel(it){return it.v.some(x=>/cancelad/i.test(String(x)))}
@@ -457,7 +461,7 @@ function summarize(){
     const D=S.data[si]; const p={si,emb:[],desp:0,prod:0,canc:0,tipos:{}};
     if(D) for(const it of D.items){
       const st=stage(it,D);
-      if(st!=='emb'&&st!=='desp'&&!inWindow(it)) continue;
+      if(!inWindow(it)&&!(st==='emb'&&recent(it))) continue;
       if(st==='emb'){p.emb.push(it); tipos(it,D).forEach(k=>{p.tipos[k]=(p.tipos[k]||0)+1})}
       else if(st==='desp') p.desp++;
       else if(st==='prod') p.prod++;
@@ -718,7 +722,7 @@ async function runStockCommand(text){
   }
   if(!cands.length) return renderVoice(`Escuché: “${text}”. No encontré ese producto.`);
   if(cands.length>1) return renderVoice(`Escuché: “${text}”. Hay varios: `+cands.slice(0,6).map(x=>`${x.prod} (${x.code})`).join(' | ')+'. Decilo más específico.');
-  try{ await stockAdjust(cands[0],mode,n); $('#voice').classList.remove('on') }catch(e){ renderVoice('No se pudo guardar: '+e.message) }
+  try{ await stockAdjust(cands[0],mode,n); closeVoice() }catch(e){ renderVoice('No se pudo guardar: '+e.message) }
 }
 
 
@@ -907,7 +911,7 @@ function homeList(fk){
     for(const it of D.items){
       const st=stage(it,D); let okk=false;
       if(fk==='hoy'){ const fe=D.cols.fenvio>=0?parseFecha(it.v[D.cols.fenvio],it.raw[D.cols.fenvio]):null; okk=st==='enviado'&&!!fe&&fe.toDateString()===today }
-      else { if(st!=='emb'&&st!=='desp'&&!inWindow(it)) continue;
+      else { if(!inWindow(it)&&!(st==='emb'&&recent(it))) continue;
         okk=fk==='emb'?st==='emb':fk==='desp'?st==='desp':fk==='prod'?st==='prod':fk==='canc'?st==='canc':fk==='late'?isLate(it,st):fk==='nopago'?isNoPago(it,D,st):false }
       if(okk) items.push(it);
     }
@@ -983,7 +987,7 @@ function renderHome(){
       return `<div class="sec">${HTITLE[fk]} por planilla</div>`+L.map(l=>{
         const D=S.data[l.si];
         return `<div class="ch"><div class="r"><b>${SHEETS[l.si].label}</b><span class="n">${l.items.length}</span></div>`+
-          (l.items.length?`<div class="olist">${[...l.items].sort((a,b)=>{const ta=tipo(a,D),tb=tipo(b,D);return ta<tb?-1:ta>tb?1:((a.date?+a.date:0)-(b.date?+b.date:0))}).map(it=>`<button class="orow1" data-sw="${l.si}:${it.row}" data-o="${l.si}:${it.row}"><span class="tp">${esc(tipo(it,D))}</span><span class="nm"><b>${NM(it,D)}</b><em>${esc(setsOf(it,D).map(x=>x.design).join(' + '))}</em></span><small>${FDATE(it.date)}</small><i>›</i></button>`).join('')}</div>`:'<div class="note">Nada en esta lista</div>')+
+          (l.items.length?`<div class="olist">${[...l.items].sort((a,b)=>{const ta=tipo(a,D),tb=tipo(b,D);return ta<tb?-1:ta>tb?1:((a.date?+a.date:0)-(b.date?+b.date:0))}).map(it=>`<button class="orow1" data-sw="${l.si}:${it.row}" data-o="${l.si}:${it.row}"><span class="tp">${esc(tipo(it,D))}</span><span class="nm"><b>${esc(it.v[D.cols.cliente]||'(sin nombre)')}</b><em>${ONO(it,D)}${esc(setsOf(it,D).map(x=>x.design).join(' + '))}</em></span><small>${FDATE(it.date)}</small><i>›</i></button>`).join('')}</div>`:'<div class="note">Nada en esta lista</div>')+
           `</div>`;
       }).join('');
     },
@@ -991,7 +995,7 @@ function renderHome(){
       const fk=S.hf||'emb', g={};
       homeList(fk).forEach(l=>{ const D=S.data[l.si]; l.items.forEach(it=>setsOf(it,D).forEach(x=>{ (g[x.tipo]=g[x.tipo]||[]).push({si:l.si,it,design:x.design,D,i:setsOf(it,D).indexOf(x)}) })) });
       const keys=Object.keys(g).sort((a,b)=>g[b].length-g[a].length); if(!keys.length) return '';
-      return `<div class="sec">Total ${HTITLE[fk].toLowerCase()} por tamaño y formato</div>`+keys.map(k=>`<div class="ch"><div class="th"><span>${esc(k)}</span><i>${g[k].length}</i></div><div class="olist">${g[k].map(x=>`<button class="orow1" data-sw="${x.si}:${x.it.row}:${x.i}" data-o="${x.si}:${x.it.row}"><span class="nm"><b>${NM(x.it,x.D)}</b><em>${esc(x.design)}</em></span><span class="src">${SHEETS[x.si].short}</span><small>${FDATE(x.it.date)}</small><i>›</i></button>`).join('')}</div></div>`).join('');
+      return `<div class="sec">Total ${HTITLE[fk].toLowerCase()} por tamaño y formato</div>`+keys.map(k=>`<div class="ch"><div class="th"><span>${esc(k)}</span><i>${g[k].length}</i></div><div class="olist">${g[k].map(x=>`<button class="orow1" data-sw="${x.si}:${x.it.row}:${x.i}" data-o="${x.si}:${x.it.row}"><span class="nm"><b>${esc(x.it.v[x.D.cols.cliente]||'(sin nombre)')}</b><em>${ONO(x.it,x.D)}${esc(x.design)}</em></span><span class="src">${SHEETS[x.si].short}</span><small>${FDATE(x.it.date)}</small><i>›</i></button>`).join('')}</div></div>`).join('');
     },
     today:()=>{
       const o=touchLoad(), todayS=new Date().toDateString(), rows=[], lim=Date.now()-14*86400000;
@@ -1003,7 +1007,7 @@ function renderHome(){
       if(!rows.length) return `<div class="sec">Gestionados hoy</div><div class="ch"><div class="note">Todavía no hay movimientos hoy.</div></div>`;
       const cls=r=>r.warn?'st-warn':r.st==='enviado'?'st-sent':r.st==='desp'?'st-pack':r.st==='canc'?'st-canc':'st-pend';
       rows.sort((a,b)=>(b.warn-a.warn)||(b.t-a.t));
-      return `<div class="sec">Gestionados hoy · ${rows.length}</div><div class="legend"><button class="lgd st-sent" data-lg="Despachado"></button><button class="lgd st-pack" data-lg="Embalado, sin despachar"></button><button class="lgd st-pend" data-lg="Sin embalar"></button><button class="lgd st-warn" data-lg="⚠ Despachado sin embalar"></button></div><div class="ch"><div class="olist">${rows.map(r=>{const {si,it,D}=r; return `<button class="orow1 ${cls(r)}" data-sw="${si}:${it.row}" data-o="${si}:${it.row}"><span class="tp">${esc(tipo(it,D))}</span><span class="nm"><b>${NM(it,D)}</b><em>${r.warn?'⚠ Despachado sin embalar · ':''}${esc(setsOf(it,D).map(x=>x.design).join(' + '))}</em></span><small>${FDATE(it.date)}</small><i>›</i></button>`}).join('')}</div></div>`;
+      return `<div class="sec">Gestionados hoy · ${rows.length}</div><div class="legend"><button class="lgd st-sent" data-lg="Despachado"></button><button class="lgd st-pack" data-lg="Embalado, sin despachar"></button><button class="lgd st-pend" data-lg="Sin embalar"></button><button class="lgd st-warn" data-lg="⚠ Despachado sin embalar"></button></div><div class="ch"><div class="olist">${rows.map(r=>{const {si,it,D}=r; return `<button class="orow1 ${cls(r)}" data-sw="${si}:${it.row}" data-o="${si}:${it.row}"><span class="tp">${esc(tipo(it,D))}</span><span class="nm"><b>${esc(it.v[D.cols.cliente]||'(sin nombre)')}</b><em>${ONO(it,D)}${r.warn?'⚠ Despachado sin embalar · ':''}${esc(setsOf(it,D).map(x=>x.design).join(' + '))}</em></span><small>${FDATE(it.date)}</small><i>›</i></button>`}).join('')}</div></div>`;
     },
     period:()=>`${perUI(true)}${S.loadedAt?`<div class="note" style="margin:-6px 4px 10px">Actualizado ${new Date(S.loadedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</div>`:''}`
   };
@@ -1304,6 +1308,16 @@ function parseEdit(text){
   const fieldT=norm(m[1]); const fk=FIELD_KEYS.find(f=>f[0].test(fieldT)); if(!fk) return null;
   return {fk,person:m[2],value:m[3].trim()};
 }
+function parseEdit2(text){
+  const t=norm(text).replace(/fecha\s+(?:de\s+|del\s+)?envio/g,'fechaenvio');
+  if(!/\b(modific|cambi|pon|actualiz|correg|edit)\w*/.test(t)) return null;
+  const fk=FIELD_KEYS.find(f=>f[0].test(t)); if(!fk||!/fecha/.test(fk[0].source)) return null;
+  const pm=t.match(/\b(?:pedido|orden|cliente)\s+(?:de la |del |de |a )?([a-z\s]+?)(?:\s+(?:y|que|a|el|la|en|con|por|para|de)\s|\s*\d|$)/);
+  if(!pm) return null;
+  const left=t.split(/\ben vez\b|\ben lugar\b|\bno el\b/)[0];
+  const vm=left.slice(left.indexOf(pm[1])+pm[1].length);
+  return {fk,person:pm[1].trim(),value:vm.trim()};
+}
 async function runEdit(text,e){
   const t=norm(text);
   const r=locate(t,[],e.person,true);
@@ -1321,14 +1335,14 @@ async function runEdit(text,e){
   const oldRaw=it.raw[col];
   try{ await setField(si,row,col,nv,e.fk[1]==='fenvio'?undefined:undefined) }
   catch(er){ return renderVoice('No se pudo guardar: '+er.message) }
-  $('#voice').classList.remove('on');
+  closeVoice();
   toastAct(`✓ ${e.fk[2]}: ${shown} · ${it.v[D.cols.cliente]} (${SHEETS[si].short} #${row})`,'Deshacer',async()=>{
     try{ await setField(si,row,col,oldRaw); toast('Deshecho') }catch(er){ toast('No se pudo deshacer: '+er.message,4000) }
   });
 }
 async function runCommand(text){
   if(S.mod==='prod') return runStockCommand(text);
-  const ed=parseEdit(text); if(ed) return runEdit(text,ed);
+  const ed=parseEdit(text)||parseEdit2(text); if(ed) return runEdit(text,ed);
   const r=parseVoice(text);
   if(r.err) return renderVoice(`Escuché: “${text}”. ${r.err}`);
   if(r.noMatch) return renderVoice(`Escuché: “${text}”. No encontré ningún pedido que coincida con “${r.q}”.`);
@@ -1340,19 +1354,22 @@ async function runCommand(text){
   catch(e){ return renderVoice('No se pudo guardar: '+e.message) }
   const labels=keys.map(k=>ACTIONS.find(a=>a.key===k).label).join(' + ');
   const msg=`${val?'✓':'Quité'} ${labels}: ${it.v[D.cols.cliente]} (${SHEETS[si].short} fila ${row})`;
-  $('#voice').classList.remove('on');
+  closeVoice();
   toastAct(msg,'Deshacer',async()=>{
     try{ for(const k of keys){ await setField(si,row,D.cols[k],!val,(k==='despachar'&&val)?'':undefined) } toast('Deshecho') }
     catch(e){ toast('No se pudo deshacer: '+e.message,4000) }
   });
 }
-function openVoice(){ renderVoice('Tocá Hablar y decí el pedido, o escribilo abajo.') }
-function renderVoice(msg, listening){
-  $('#vp').innerHTML=`<h3 style="margin:0 0 6px">Asistente de voz</h3><div class="note" style="font-size:14px;color:var(--ink)">${esc(msg)}</div>
-    <div class="row" style="margin-top:14px"><button class="pri" id="vhab">${listening?'Escuchando…':'🎤 Hablar'}</button><button class="sec2" id="vcl">Cerrar</button></div>
-    <div class="f"><input id="vtxt" type="text" placeholder="ej: ya embalé el de María"></div>
-    <div class="note">Ejemplos: "embalé el pedido de María", "despachado Juan Pérez", "pegado y embalado Lucía fila 120", "sacá el embalado de Lucía", "cambiá la fecha de María a ayer", "poné nota de Ana: llamar antes", "cambiá la fecha de envío de Juan a hoy".</div>`;
+let vtimer=null;
+function closeVoice(){ $('#voice').classList.remove('on'); const m=$('#mic'); if(m) m.classList.remove('rec'); clearTimeout(vtimer) }
+function openVoice(){ startListen(false) }
+function renderVoice(msg, listening, state){
+  clearTimeout(vtimer);
+  const ic=listening?'🎙️ Escuchando…':state==='ok'?'✅ Listo':state==='int'?'💬 Entendí':'⚠️ No pude';
+  $('#vp').innerHTML=`<div class="vs"><span>${ic}</span><button id="vcl">✕</button></div><div class="vt">${esc(msg)}</div>${(!listening&&state!=='int'&&state!=='ok')?'<div class="vh">Tocá el micrófono para intentar de nuevo. Ej: “embalé el pedido de María”, “cambiá la fecha de envío de Juan a hoy”.</div>':''}`;
   $('#voice').classList.add('on');
+  const m=$('#mic'); if(m) m.classList.toggle('rec',!!listening);
+  if(!listening) vtimer=setTimeout(closeVoice,state==='ok'?3500:14000);
 }
 async function ensureMic(){
   if(!navigator.mediaDevices||!navigator.mediaDevices.getUserMedia) return true;
@@ -1360,30 +1377,32 @@ async function ensureMic(){
   catch(e){ return false }
 }
 const VOICE_ERR={
-  'not-allowed':'No hay permiso para usar el micrófono. En el navegador tocá el candado de la barra de direcciones (o Ajustes del sitio) y permití el micrófono. Mientras tanto escribí el comando.',
-  'service-not-allowed':'El reconocimiento de voz no está permitido en este navegador. Escribí el comando abajo.',
+  'not-allowed':'No hay permiso para usar el micrófono. En el navegador tocá el candado de la barra de direcciones (o Ajustes del sitio) y permití el micrófono. ',
+  'service-not-allowed':'El reconocimiento de voz no está permitido en este navegador. ',
   'audio-capture':'No encuentro el micrófono. Revisá que no lo use otra app.',
-  'network':'Sin conexión para reconocer la voz. Escribí el comando abajo.',
+  'network':'Sin conexión para reconocer la voz. ',
   'no-speech':'No escuché nada. Tocá Hablar y hablá después del pitido.',
   'aborted':'Se cortó la escucha. Tocá Hablar de nuevo.',
-  'language-not-supported':'Este navegador no tiene español para voz. Escribí el comando abajo.'
+  'language-not-supported':'Este navegador no tiene español para voz. '
 };
 async function startListen(retry){
   const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
-  if(!SR){ renderVoice('Este navegador no tiene reconocimiento de voz. Escribí el comando abajo.'); return }
+  if(!SR){ renderVoice('Este navegador no tiene reconocimiento de voz.'); return }
+  if(window._rec){ try{ window._rec.stop() }catch(e){} window._rec=null; closeVoice(); return }
   const micOk=await ensureMic();
   if(!micOk){ renderVoice(VOICE_ERR['not-allowed']); return }
-  const rec=new SR(); rec.lang='es-AR'; rec.interimResults=false; rec.maxAlternatives=1; rec.continuous=false;
+  const rec=new SR(); window._rec=rec; rec.lang='es-AR'; rec.interimResults=true; rec.maxAlternatives=1; rec.continuous=false;
   renderVoice('Hablá ahora…', true);
-  let got=false;
-  rec.onresult=e=>{ got=true; runCommand(e.results[0][0].transcript) };
+  let got=false, last='';
+  rec.onresult=e=>{ const r=e.results[e.results.length-1]; last=r[0].transcript; if(r.isFinal){ got=true; renderVoice('“'+last+'”',true); runCommand(last) } else renderVoice('“'+last+'”',true) };
   rec.onerror=e=>{
+    window._rec=null;
     if(e.error==='aborted' && !retry && !got){ return startListen(true) }
-    renderVoice(VOICE_ERR[e.error]||('No te escuché bien ('+e.error+'). Escribí el comando abajo.'));
+    renderVoice(VOICE_ERR[e.error]||('No te escuché bien ('+e.error+').'));
   };
-  rec.onnomatch=()=>renderVoice('No entendí. Probá de nuevo o escribí el comando.');
-  rec.onend=()=>{ if(!got && $('#vhab') && $('#vhab').textContent==='Escuchando…') renderVoice('No llegó ninguna frase. Probá de nuevo o escribí el comando.') };
-  try{ rec.start() }catch(e){ renderVoice('No pude iniciar el micrófono. Escribí el comando abajo.') }
+  rec.onnomatch=()=>renderVoice('No entendí. Probá de nuevo.');
+  rec.onend=()=>{ window._rec=null; if(!got){ if(last){ got=true; runCommand(last) } else if($('#voice').classList.contains('on')&&$('#vp').textContent.includes('Escuchando')) renderVoice('No llegó ninguna frase. Probá de nuevo.') } };
+  try{ rec.start() }catch(e){ window._rec=null; renderVoice('No pude iniciar el micrófono.') }
 }
 
 /* ---------- Instalación como app ---------- */
@@ -1474,8 +1493,7 @@ document.addEventListener('click',async e=>{
   const ed=t.closest('[data-e]'); if(ed){const [si,r]=ed.dataset.e.split(':').map(Number);openEdit(si,r);return}
   const cd=t.closest('[data-card]'); if(cd&&!t.closest('button')&&Date.now()-(S.swAt||0)>450){ const [si,r]=cd.dataset.card.split(':').map(Number); openOrder(si,r); return }
   if(t.id==='mic'){openVoice();return}
-  if(t.id==='vhab'){startListen(false);return}
-  if(t.id==='vcl'||t.id==='voice'){$('#voice').classList.remove('on');return}
+    if(t.id==='vcl'){closeVoice();return}
   if(t.id==='tact'){ $('#toast').style.display='none'; const f=window.__undo; window.__undo=null; if(f) f(); return }
   const ac=t.closest('[data-act]'); if(ac){ if(ac.dataset.act==='reload'){ if(S.mod==='prod') loadStock(); else loadAll() } if(ac.dataset.act==='notif') askNotif();
     if(ac.dataset.act==='share') shareList();
@@ -1533,7 +1551,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v32';
+const APP_V='v33';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

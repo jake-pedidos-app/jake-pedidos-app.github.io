@@ -185,7 +185,7 @@ button.alert{font-size:14px;color:var(--ink);font-family:inherit}
 #home{padding-bottom:130px}#list{padding-bottom:130px}
 .orow1 small{flex:none;font-size:11px;color:#b5aaa3}
 .ch .r{padding-right:62px}
-#mic{width:52px;height:52px;font-size:21px;opacity:.92}
+#mic{width:52px;height:52px;font-size:21px;opacity:.92}#bell{right:22px;bottom:148px}
 .orow1 .nm{flex:1;min-width:0;display:block}.orow1 .nm b{display:block;font-size:15px}.orow1 .nm em{display:block;font-style:normal;font-size:12.5px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .orow1 .src{flex:none;margin:0}
 .setrow{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:14px;font-weight:600}
@@ -219,6 +219,11 @@ button.fl{padding:7px 11px;font-size:12.5px}
 .orow1.st-sent,.orow1.st-pack,.orow1.st-pend,.orow1.st-canc{border-radius:14px;margin-bottom:6px;padding-left:10px;padding-right:10px;border:0}
 .legend{display:flex;gap:6px;flex-wrap:wrap;margin:0 2px 8px}.lg{font-size:11.5px;font-weight:700;border-radius:999px;padding:3px 10px;color:var(--ink)}.lg.st-sent{background:#BFE5CC}.lg.st-pack{background:#E3F3E9}.lg.st-pend{background:#FFF0D2}
 .swh2{display:flex;align-items:center;padding:0 16px;font-size:14px;font-weight:800;color:var(--ink);pointer-events:none}.swh2.mk{background:#CDEBDB}.swh2.um{background:#F9C9C2}
+.pht{width:100%;background:none;border:0;padding:0;font:inherit;cursor:pointer}.pht .car{font-style:normal;color:var(--mut)}
+.dsb,.dsc{background:none;border:0;font:inherit;padding:2px 0;color:inherit;cursor:pointer}.dsc{font-size:13px;font-weight:700;color:var(--coral,#d9534f)}.dsum span i{font-style:normal;margin:0 5px;color:#bbb}
+#bell{position:fixed;right:24px;bottom:150px;width:40px;height:40px;border-radius:50%;background:#fff;border:0;font-size:18px;box-shadow:0 4px 14px rgba(0,0,0,.18);z-index:7}#bell i{position:absolute;top:-3px;right:-3px;background:#c0392b;color:#fff;font-style:normal;font-size:11px;font-weight:800;min-width:17px;height:17px;border-radius:9px;line-height:17px}
+.orow1[data-ssel]{outline:2.5px solid var(--coral,#d9534f);background:#FFE3DC!important}
+#bulk{flex-direction:column;align-items:stretch;gap:8px}#bulk .bt{display:flex;gap:8px;align-items:center}#bulk .bb{display:flex;gap:6px;overflow-x:auto}#bulk .bb button{white-space:nowrap}#bulk .bb .ig{background:#8a2b20}
 .dsum{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#fff;border-radius:16px;padding:12px 14px;margin:0 0 12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}.dsum b{font-size:15px}.dsum span{font-size:13px;font-weight:700;color:var(--coral,#d9534f)}.ono{font-size:12px;font-weight:700;color:var(--coral,#d9534f);margin-left:4px}.orow1 .nm b,.orow1 .nm em{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.orow1 .nm{min-width:0;flex:1}.lgd{width:16px;height:16px;border-radius:50%;border:0;padding:0}.lgd.st-sent{background:#BFE5CC}.lgd.st-pack{background:#E3F3E9;box-shadow:inset 0 0 0 1px #b9d9c4}.lgd.st-pend{background:#FFF0D2;box-shadow:inset 0 0 0 1px #ecd9a8}.lgd.st-warn{background:#FFD9B8}
 .orow1.st-warn{background:#FFD9B8;border-radius:14px;margin-bottom:6px;padding-left:10px;padding-right:10px;border:0}.lg.st-warn{background:#FFD9B8}
 </style>
@@ -326,6 +331,19 @@ function parseFecha(v,raw){
 }
 
 /* ---------- Parseo de planillas ---------- */
+function ignLoad(){ try{ return JSON.parse(ls.get('ign')||'{}') }catch(e){ return {} } }
+function ignSave(o){ ls.set('ign',JSON.stringify(o)) }
+function ignorar(keys){
+  const o=ignLoad(), done=[];
+  for(const k of keys){ const [si,row]=k.split(':').map(Number); const D=S.data[si]; const it=D&&D.items.find(x=>x.row===row); if(!it) continue;
+    o[k]=String(it.v[D.cols.cliente]||'').trim(); D.items=D.items.filter(x=>x!==it); D.ignored.push(it); done.push(k) }
+  ignSave(o); return done;
+}
+function designorar(keys){
+  const o=ignLoad();
+  for(const k of keys){ const [si,row]=k.split(':').map(Number); const D=S.data[si]; const it=D&&D.ignored.find(x=>x.row===row); delete o[k]; if(it){ D.ignored=D.ignored.filter(x=>x!==it); D.items.push(it); D.items.sort((a,b)=>a.row-b.row) } }
+  ignSave(o);
+}
 function parseSheet(i, rows, raw){
   const h = rows.findIndex((r,ix)=>ix<12 && r.some(c=>/^embalar/i.test(String(c||'').trim())));
   if(h<0) throw new Error('No encontré los encabezados en '+SHEETS[i].name);
@@ -353,7 +371,9 @@ function parseSheet(i, rows, raw){
     it.date = cols.fecha>=0 ? parseFecha(it.v[cols.fecha], it.raw[cols.fecha]) : null;
     items.push(it);
   }
-  S.data[i]={head,cols,isBool,dateMode,items,h};
+  const ign=ignLoad(), keep=[], gone=[];
+  for(const it of items){ const k=i+':'+it.row; (ign[k]!==undefined&&ign[k]===String(it.v[cols.cliente]||'').trim()?gone:keep).push(it) }
+  S.data[i]={head,cols,isBool,dateMode,items:keep,ignored:gone,h};
 }
 function showPopup(){
   const sum=summarize(), n=sum.emb.length, tt=totalTipos(sum);
@@ -386,6 +406,7 @@ async function loadAll(silent){
 }
 
 /* ---------- Reglas ---------- */
+const RA=(si,row,i)=>S.selMode?`data-sel="${si}:${row}"${S.sel.has(si+':'+row)?' data-ssel="1"':''}`:`data-sw="${si}:${row}${i==null?'':':'+i}" data-o="${si}:${row}"`;
 const recent=it=>it.date?(Date.now()-it.date.getTime())<=30*86400000:!CFG.nodate;
 const ONO=(it,D)=>{ const o=D.cols.orden>=0?String(it.v[D.cols.orden]||'').trim():''; return o?'#'+esc(o)+' · ':'' };
 const NM=(it,D)=>{ const n=esc(it.v[D.cols.cliente]||'(sin nombre)'); const o=D.cols.orden>=0?String(it.v[D.cols.orden]||'').trim():''; return n+(o?` <span class="ono">#${esc(o)}</span>`:'') };
@@ -412,9 +433,10 @@ function perUI(hideNd){
   const p=S.per||{}, on=(k,n)=>p.k===k&&(n===undefined||p.n===n)?'on':'';
   const pre=[['today','Hoy'],['d3','3 días'],['week','Esta semana'],['month','Este mes'],['n:30','30 días'],['n:60','60 días'],['n:90','90 días'],['all','Todo']];
   const custom=p.k==='custom'||(p.k==='n'&&![30,60,90].includes(p.n));
-  return `<div class="perbox"><div class="perhd"><span>📅 Período</span><b>${perLabel()}</b></div>
-  <div class="chips pc">${pre.map(([k,l])=>{const [kk,nn]=k.split(':');return `<button class="chip ${on(kk,nn?+nn:undefined)}" data-per="${k}">${l}</button>`}).join('')}<button class="chip ${custom||S.perOpen?'on':''}" data-act="perOpen">✎ Personalizar</button></div>
-  ${(S.perOpen||custom)?`<div class="perx"><label>Últimos <input type="number" min="1" id="pn" value="${p.k==='n'?p.n:''}" placeholder="N"> días</label></div>
+  const colp=ls.get('percol')!=='0';
+  return `<div class="perbox"><button class="perhd pht" data-act="perToggle"><span>📅 Período</span><b>${perLabel()} <i class="car">${colp?'▾':'▴'}</i></b></button>
+  ${colp?'':`<div class="chips pc">${pre.map(([k,l])=>{const [kk,nn]=k.split(':');return `<button class="chip ${on(kk,nn?+nn:undefined)}" data-per="${k}">${l}</button>`}).join('')}<button class="chip ${custom||S.perOpen?'on':''}" data-act="perOpen">✎ Personalizar</button></div>`}
+  ${(!colp&&(S.perOpen||custom))?`<div class="perx"><label>Últimos <input type="number" min="1" id="pn" value="${p.k==='n'?p.n:''}" placeholder="N"> días</label></div>
   <div class="perx"><label>Desde <input type="date" id="pf" value="${p.k==='custom'?p.from||'':''}"></label><label>hasta <input type="date" id="pt" value="${p.k==='custom'?p.to||'':''}"></label></div>`:''}
   ${hideNd?'':`<div class="pernd"><span>Ignorar pedidos sin fecha</span><button class="sw2 ${CFG.nodate?'on':''}" data-cfg="nodate:1"></button></div>`}</div>`;
 }
@@ -571,7 +593,7 @@ async function toggle(si,row,c){
 /* ================= MÓDULO PRODUCCIÓN: STOCK ================= */
 S.mod=ls.get('mod')||'central';
 S.stock={items:[],loaded:false,loading:false,err:null,title:'Hoja 1',q:'',cat:'Todas'};
-const MODS={central:'Jake Central',prod:'Jake Producción'};
+const MODS={central:'Jake Pedidos',prod:'Jake Producción'};
 const modName=k=>ls.get('modn_'+k)||MODS[k];
 const stkNote=n=>(!isNaN(+n)&&String(n).trim()!=='')?+n:0;
 function loadMod(){ return S.mod==='prod'?loadStock():loadAll() }
@@ -987,7 +1009,7 @@ function renderHome(){
       return `<div class="sec">${HTITLE[fk]} por planilla</div>`+L.map(l=>{
         const D=S.data[l.si];
         return `<div class="ch"><div class="r"><b>${SHEETS[l.si].label}</b><span class="n">${l.items.length}</span></div>`+
-          (l.items.length?`<div class="olist">${[...l.items].sort((a,b)=>{const ta=tipo(a,D),tb=tipo(b,D);return ta<tb?-1:ta>tb?1:((a.date?+a.date:0)-(b.date?+b.date:0))}).map(it=>`<button class="orow1" data-sw="${l.si}:${it.row}" data-o="${l.si}:${it.row}"><span class="tp">${esc(tipo(it,D))}</span><span class="nm"><b>${esc(it.v[D.cols.cliente]||'(sin nombre)')}</b><em>${ONO(it,D)}${esc(setsOf(it,D).map(x=>x.design).join(' + '))}</em></span><small>${FDATE(it.date)}</small><i>›</i></button>`).join('')}</div>`:'<div class="note">Nada en esta lista</div>')+
+          (l.items.length?`<div class="olist">${[...l.items].sort((a,b)=>{const ta=tipo(a,D),tb=tipo(b,D);return ta<tb?-1:ta>tb?1:((a.date?+a.date:0)-(b.date?+b.date:0))}).map(it=>`<button class="orow1" ${RA(l.si,it.row)}><span class="tp">${esc(tipo(it,D))}</span><span class="nm"><b>${esc(it.v[D.cols.cliente]||'(sin nombre)')}</b><em>${ONO(it,D)}${esc(setsOf(it,D).map(x=>x.design).join(' + '))}</em></span><small>${FDATE(it.date)}</small><i>›</i></button>`).join('')}</div>`:'<div class="note">Nada en esta lista</div>')+
           `</div>`;
       }).join('');
     },
@@ -995,7 +1017,7 @@ function renderHome(){
       const fk=S.hf||'emb', g={};
       homeList(fk).forEach(l=>{ const D=S.data[l.si]; l.items.forEach(it=>setsOf(it,D).forEach(x=>{ (g[x.tipo]=g[x.tipo]||[]).push({si:l.si,it,design:x.design,D,i:setsOf(it,D).indexOf(x)}) })) });
       const keys=Object.keys(g).sort((a,b)=>g[b].length-g[a].length); if(!keys.length) return '';
-      return `<div class="sec">Total ${HTITLE[fk].toLowerCase()} por tamaño y formato</div>`+keys.map(k=>`<div class="ch"><div class="th"><span>${esc(k)}</span><i>${g[k].length}</i></div><div class="olist">${g[k].map(x=>`<button class="orow1" data-sw="${x.si}:${x.it.row}:${x.i}" data-o="${x.si}:${x.it.row}"><span class="nm"><b>${esc(x.it.v[x.D.cols.cliente]||'(sin nombre)')}</b><em>${ONO(x.it,x.D)}${esc(x.design)}</em></span><span class="src">${SHEETS[x.si].short}</span><small>${FDATE(x.it.date)}</small><i>›</i></button>`).join('')}</div></div>`).join('');
+      return `<div class="sec">Total ${HTITLE[fk].toLowerCase()} por tamaño y formato</div>`+keys.map(k=>`<div class="ch"><div class="th"><span>${esc(k)}</span><i>${g[k].length}</i></div><div class="olist">${g[k].map(x=>`<button class="orow1" ${RA(x.si,x.it.row,x.i)}><span class="nm"><b>${esc(x.it.v[x.D.cols.cliente]||'(sin nombre)')}</b><em>${ONO(x.it,x.D)}${esc(x.design)}</em></span><span class="src">${SHEETS[x.si].short}</span><small>${FDATE(x.it.date)}</small><i>›</i></button>`).join('')}</div></div>`).join('');
     },
     today:()=>{
       const o=touchLoad(), todayS=new Date().toDateString(), rows=[], lim=Date.now()-14*86400000;
@@ -1007,13 +1029,13 @@ function renderHome(){
       if(!rows.length) return `<div class="sec">Gestionados hoy</div><div class="ch"><div class="note">Todavía no hay movimientos hoy.</div></div>`;
       const cls=r=>r.warn?'st-warn':r.st==='enviado'?'st-sent':r.st==='desp'?'st-pack':r.st==='canc'?'st-canc':'st-pend';
       rows.sort((a,b)=>(b.warn-a.warn)||(b.t-a.t));
-      return `<div class="sec">Gestionados hoy · ${rows.length}</div><div class="legend"><button class="lgd st-sent" data-lg="Despachado"></button><button class="lgd st-pack" data-lg="Embalado, sin despachar"></button><button class="lgd st-pend" data-lg="Sin embalar"></button><button class="lgd st-warn" data-lg="⚠ Despachado sin embalar"></button></div><div class="ch"><div class="olist">${rows.map(r=>{const {si,it,D}=r; return `<button class="orow1 ${cls(r)}" data-sw="${si}:${it.row}" data-o="${si}:${it.row}"><span class="tp">${esc(tipo(it,D))}</span><span class="nm"><b>${esc(it.v[D.cols.cliente]||'(sin nombre)')}</b><em>${ONO(it,D)}${r.warn?'⚠ Despachado sin embalar · ':''}${esc(setsOf(it,D).map(x=>x.design).join(' + '))}</em></span><small>${FDATE(it.date)}</small><i>›</i></button>`}).join('')}</div></div>`;
+      return `<div class="sec">Gestionados hoy · ${rows.length}</div><div class="legend"><button class="lgd st-sent" data-lg="Despachado"></button><button class="lgd st-pack" data-lg="Embalado, sin despachar"></button><button class="lgd st-pend" data-lg="Sin embalar"></button><button class="lgd st-warn" data-lg="⚠ Despachado sin embalar"></button></div><div class="ch"><div class="olist">${rows.map(r=>{const {si,it,D}=r; return `<button class="orow1 ${cls(r)}" ${RA(si,it.row)}><span class="tp">${esc(tipo(it,D))}</span><span class="nm"><b>${esc(it.v[D.cols.cliente]||'(sin nombre)')}</b><em>${ONO(it,D)}${r.warn?'⚠ Despachado sin embalar · ':''}${esc(setsOf(it,D).map(x=>x.design).join(' + '))}</em></span><small>${FDATE(it.date)}</small><i>›</i></button>`}).join('')}</div></div>`;
     },
     period:()=>`${perUI(true)}${S.loadedAt?`<div class="note" style="margin:-6px 4px 10px">Actualizado ${new Date(S.loadedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</div>`:''}`
   };
   const hl=homeList('hoy'), htot=hl.reduce((a,l)=>a+l.items.length,0);
-  const hsum=`<div class="dsum"><b>Hoy despachaste ${htot}</b><span>${hl.map(l=>`${l.items.length} ${SHEETS[l.si].short}`).join(' · ')}</span></div>`;
-  return `<div class="hello">Hoy<b>Pedidos Jake</b></div>`+hsum+CFG.order.filter(k=>!CFG.hide[k]).map(k=>parts[k]?parts[k]():'').join('');
+  const hsum=`<div class="dsum"><button class="dsb" data-hoy="all"><b>Hoy despachaste ${htot}</b></button><span>${hl.map(l=>`<button class="dsc" data-hoy="${l.si}">${l.items.length} ${SHEETS[l.si].short}</button>`).join('<i>·</i>')}</span></div>`;
+  return hsum+CFG.order.filter(k=>!CFG.hide[k]&&k!=='alerts').map(k=>parts[k]?parts[k]():'').join('');
 }
 function renderConfigProd(){
   const sw=(on,att)=>`<button class="sw2 ${on?'on':''}" ${att}></button>`;
@@ -1062,6 +1084,7 @@ function renderConfig(){
     ${(window.Notification&&Notification.permission==='denied'&&CFG.notif)?'<div class="note">El navegador las tiene bloqueadas: activalas en los ajustes del sitio del teléfono.</div>':''}
     <div class="cfgrow"><span>Probar la ventana ahora</span><button class="chip on" data-act="popup">Ver</button></div>
   </div>
+  ${(()=>{ const L=[]; SHEETS.forEach((sh,i)=>(S.data[i]&&S.data[i].ignored||[]).forEach(it=>L.push([i,it]))); return L.length?`<div class="sec">Pedidos ignorados · ${L.length}</div><div class="setcard">${L.map(([i,it])=>`<div class="cfgrow"><span>${esc(it.v[S.data[i].cols.cliente]||'(sin nombre)')}<br><small style="color:var(--mut)">${SHEETS[i].short} · fila ${it.row}</small></span><button class="chip on" data-unign="${i}:${it.row}">Restaurar</button></div>`).join('')}</div>`:'' })()}
   <div class="sec">Acceso de otras personas</div>
   <div class="setcard"><div class="cfgrow" style="display:block;line-height:1.5"><span style="font-weight:400">Cualquier persona con una cuenta de Google que tenga acceso a la planilla “Planillas de PEDIDOS” puede usar la app con su mail. Si no tiene acceso a la planilla, no puede ver ni editar nada. Para sumar a alguien: compartile la planilla desde Google Sheets y pasale el link de la app.</span>
     <div class="chips" style="margin-top:10px"><button class="chip on" data-act="opensheet">Abrir planilla para compartir</button><button class="chip" data-act="shareapp">⇪ Compartir link de la app</button></div></div></div>
@@ -1109,10 +1132,31 @@ function renderSheets(){
       ${canGroup?`<button class="chip ${S.group?'on':''}" data-act="group">Agrupar por tamaño</button>`:''}
 </div>`;
   const TABS=[[ALL,'Todas'],...SHEETS.map((s,i)=>[i,s.label])];
-  const bulk=S.selMode?`<div id="bulk"><span>${S.sel.size} seleccionados</span><button class="sec" data-act="selall">Todos</button><button data-bulk="embalar">Embalado</button><button data-bulk="despachar">Despachado</button><button class="sec" data-act="select">✕</button></div>`:'';
+  const bulkOld=S.selMode?`<div id="bulk"><span>${S.sel.size} seleccionados</span><button class="sec" data-act="selall">Todos</button><button data-bulk="embalar">Embalado</button><button data-bulk="despachar">Despachado</button><button class="sec" data-act="select">✕</button></div>`:'';
   return `<div class="tabs">${TABS.map(([k,l])=>`<button class="tab ${S.tab===k?'on':''}" data-tab="${k}">${l}</button>`).join('')}</div>
     <div class="bar"><input id="q" type="search" placeholder="Buscar cliente, diseño, notas…" value="${esc(S.q)}" autocomplete="off">
-    <div class="chips" id="fchips">${chips}</div>${acts}</div><div id="list">${body}</div>${bulk}`;
+    <div class="chips" id="fchips">${chips}</div>${acts}</div><div id="list">${body}</div>`;
+}
+function bellN(){ if(S.mod!=='central'||!S.data[0]) return 0; const s=summarize(); return (s.late?1:0)+(s.sinPago?1:0) }
+function bulkBar(){
+  const fl=FLAGS.filter(f=>S.data[0]&&S.data[0].cols[f.key]>=0);
+  return `<div id="bulk"><div class="bt"><span>${S.sel.size} seleccionados</span><button class="sec" data-act="selall">Todos</button><button class="sec" data-act="select">✕</button></div><div class="bb">${fl.map(f=>`<button data-bulk="${f.key}">${f.label}</button>`).join('')}<button class="ig" data-bulkign="1">🚫 Ignorar</button></div></div>`;
+}
+function openBell(){
+  const s=summarize(), ig=SHEETS.reduce((a,_,i)=>a+((S.data[i]&&S.data[i].ignored||[]).length),0);
+  const row=(k,t)=>`<button class="orow1" data-hf="${k}" style="width:100%"><span class="nm"><b>${t}</b></span><i>›</i></button>`;
+  $('#sp').innerHTML=`<div class="pophd">🔔 Alertas</div>`+
+   (s.late?row('late',`⏰ ${s.late} pedido(s) llevan más de ${S.late} días sin despachar`):'')+
+   (s.sinPago?row('nopago',`💳 ${s.sinPago} pedido(s) sin pago confirmado`):'')+
+   (!s.late&&!s.sinPago?'<div class="note" style="text-align:center;padding:14px">No hay alertas.</div>':'')+
+   (ig?`<div class="note" style="margin-top:8px">🚫 ${ig} pedido(s) ignorados (se restauran desde Ajustes).</div>`:'')+
+   '<div class="row"><button class="sec2" id="cx">Cerrar</button></div>';
+  $('#sheet').classList.add('on'); $('#sheet').dataset.mode='pop';
+}
+function openHoy(which){
+  const hl=homeList('hoy').filter(l=>which==='all'||l.si===+which), tot=hl.reduce((a,l)=>a+l.items.length,0);
+  $('#sp').innerHTML=`<div class="pophd">📦 Despachados hoy · ${tot}</div>`+(tot?hl.filter(l=>l.items.length).map(l=>{const D=S.data[l.si]; return `<div class="popsec">${SHEETS[l.si].label} · ${l.items.length}</div><div class="olist">${l.items.map(it=>`<button class="orow1" data-o="${l.si}:${it.row}"><span class="tp">${esc(tipo(it,D))}</span><span class="nm"><b>${esc(it.v[D.cols.cliente]||'(sin nombre)')}</b><em>${ONO(it,D)}${esc(setsOf(it,D).map(x=>x.design).join(' + '))}</em></span><i>›</i></button>`).join('')}</div>`}).join(''):'<div class="note" style="text-align:center;padding:14px">Todavía no despachaste nada hoy.</div>')+'<div class="row"><button class="sec2" id="cx">Cerrar</button></div>';
+  $('#sheet').classList.add('on'); $('#sheet').dataset.mode='pop';
 }
 function render(opt={}){
   const y=window.scrollY;
@@ -1121,7 +1165,7 @@ function render(opt={}){
   if(!token) return renderLogin();
   const prod=S.mod==='prod'; if(prod&&!['pstart','stock','config'].includes(S.view)) S.view='pstart'; if(!prod&&['pstart','stock'].includes(S.view)) S.view='home';
   const home=S.view==='home';
-  if(S.view!=='sheets') S.selMode=false;
+  if(S.view!=='sheets'&&S.view!=='home') S.selMode=false;
   $('#app').innerHTML=`<header><div class="top">
       <button class="brandlogo" data-view="${prod?'pstart':'home'}" aria-label="Inicio"><img src="jk-192.png" alt="Jake"></button>
       <button class="brand msw" data-act="modsw" aria-label="Cambiar de sección"><b>${esc(modName(S.mod))}</b><i class="car">▾</i></button>
@@ -1129,7 +1173,7 @@ function render(opt={}){
       </div>
     </header>
     ${S.view==='pstart'?`<div id="home">${renderPStart()}</div>`:S.view==='stock'?renderStock():home?`<div id="home">${renderHome()}</div>`:S.view==='config'?`<div id="home">${S.mod==='prod'?renderConfigProd():renderConfig()}</div>`:renderSheets()}
-    ${S.selMode?'':'<button id="mic" title="Hablar">🎤</button>'}
+    ${S.selMode?bulkBar():(S.view==='config'?'':'<button id="bell" title="Alertas">🔔'+(bellN()?'<i>'+bellN()+'</i>':'')+'</button>')+'<button id="mic" title="Hablar">🎤</button>'}
     <nav>${prod?`<button class="${S.view==='pstart'?'on':''}" data-view="pstart"><b>⌂</b>Inicio</button><button class="${S.view==='stock'?'on':''}" data-view="stock"><b>📦</b>Stock</button><button class="${S.view==='config'?'on':''}" data-view="config"><b>⚙</b>Ajustes</button>`:`<button class="${home?'on':''}" data-view="home"><b>⌂</b>Inicio</button><button class="${S.view==='sheets'?'on':''}" data-view="sheets"><b>☰</b>Pedidos</button><button class="${S.view==='config'?'on':''}" data-view="config"><b>⚙</b>Ajustes</button>`}</nav>`;
   // restaurar desplazamientos horizontales (chips y pestañas) para que no salten al inicio
   document.querySelectorAll('.chips,.tabs').forEach((el,i)=>{ if(scrolls[i]!=null) el.scrollLeft=scrolls[i] });
@@ -1155,7 +1199,7 @@ function openOrder(si,row){
   ${multi?`<div class="setbox full" data-sw="${si}:${row}"><div class="setrow"><b>Pedido completo · ${esc(it.v[D.cols.cliente]||'')}</b></div></div>`:''}</div>
   ${D.cols.enviar>=0&&it.v[D.cols.enviar]?`<div class="note">🚚 ${esc(it.v[D.cols.enviar])}</div>`:''}
   ${nt?`<div class="note">📝 ${esc(nt)}</div>`:''}
-  <div class="row"><button class="sec2" id="cx">Cerrar</button><button class="sec2" data-gopedido="${si}:${row}">Ver en Pedidos</button><button class="pri" data-e="${si}:${row}">Editar todo</button></div>`;
+  <div class="row"><button class="sec2" id="cx">Cerrar</button><button class="sec2" data-gopedido="${si}:${row}">Ver en Pedidos</button><button class="pri" data-e="${si}:${row}">Editar todo</button></div><div class="row" style="margin-top:8px"><button class="sec2" data-ign1="${si}:${row}">🚫 Ignorar este pedido</button></div>`;
   $('#sheet').classList.add('on'); $('#sheet').dataset.si=si; $('#sheet').dataset.row=row; $('#sheet').dataset.mode='order';
 }
 function openSwipe(si,row,i,mode){
@@ -1204,13 +1248,14 @@ async function saveEdit(){
 }
 
 /* ---------- Selección masiva y compartir ---------- */
-const BULK_LABEL={embalar:'Embalado',despachar:'Despachado'};
+const BULK_LABEL={imp:'Impreso',prep:'Preparado',pegar:'Pegado',embalar:'Embalado',despachar:'Despachado'};
 async function bulk(key){
   const data=[], changed=[];
   for(const k of S.sel){
     const [si,row]=k.split(':').map(Number); const D=S.data[si]; const it=findItem(si,row); if(!it) continue;
     const c=D.cols[key]; if(c<0||ok(it,c)) continue;
     const sh=SHEETS[si]; data.push({range:`'${sh.name}'!${colLetter(c)}${row}`,values:[[true]]});
+    if(key==='despachar'&&D.cols.embalar>=0&&!ok(it,D.cols.embalar)){ data.push({range:`'${sh.name}'!${colLetter(D.cols.embalar)}${row}`,values:[[true]]}); it.raw[D.cols.embalar]=true; it.v[D.cols.embalar]='TRUE' }
     const fe=D.cols.fenvio; let fv;
     if(key==='despachar'&&fe>=0&&!String(it.v[fe]).trim()){ fv=D.dateMode==='serial'?hoySerial():hoyTexto(); data.push({range:`'${sh.name}'!${colLetter(fe)}${row}`,values:[[fv]]}) }
     changed.push({si,row,c,fe:fv!==undefined?fe:-1,old:[...it.raw],oldv:[...it.v]});
@@ -1439,6 +1484,13 @@ function installHelp(){
   document.addEventListener('touchcancel',()=>{ if(el){ el.style.transform=''; if(el._bg!==undefined){el.style.background=el._bg;el._bg=undefined;el.style.zIndex=''} } el=null; document.querySelectorAll('.swh2').forEach(x=>x.remove()) });
   document.addEventListener('click',()=>setTimeout(()=>{ if(!el) document.querySelectorAll('.swh2').forEach(x=>x.remove()) },0),true);
   setInterval(()=>{ if(!el) document.querySelectorAll('.swh2').forEach(x=>x.remove()) },1500);
+  let lpT=null,lpx=0,lpy=0;
+  const lpKey=t=>{ const n=t.closest&&t.closest('[data-sw],[data-o],[data-card]'); if(!n) return null; const v=n.dataset.o||n.dataset.sw||n.dataset.card; return v.split(':').slice(0,2).join(':') };
+  document.addEventListener('touchstart',e=>{ clearTimeout(lpT); if(S.selMode||e.touches.length>1||!['home','sheets'].includes(S.view)||e.target.closest('#sheet,#sw2,#voice,button[data-t],button[data-e]')) return; const k=lpKey(e.target); if(!k) return; lpx=e.touches[0].clientX; lpy=e.touches[0].clientY;
+    lpT=setTimeout(()=>{ S.lpAt=Date.now(); S.selMode=true; S.sel=new Set([k]); if(navigator.vibrate) navigator.vibrate(30); render({keep:true}) },550) },{passive:true});
+  document.addEventListener('touchmove',e=>{ if(lpT&&(Math.abs(e.touches[0].clientX-lpx)>10||Math.abs(e.touches[0].clientY-lpy)>10)){ clearTimeout(lpT); lpT=null } },{passive:true});
+  document.addEventListener('touchend',()=>{ clearTimeout(lpT); lpT=null },{passive:true});
+  document.addEventListener('contextmenu',e=>{ if(e.target.closest&&e.target.closest('[data-sw],[data-o],[data-card],[data-sel]')) e.preventDefault() });
   document.addEventListener('touchstart',e=>{ clean(); el=e.target.closest&&e.target.closest('[data-sw]'); if(!el||e.touches.length>1){el=null;return} sx=e.touches[0].clientX; sy=e.touches[0].clientY; dx=0; mv=false },{passive:true});
   document.addEventListener('touchmove',e=>{ if(!el) return; dx=e.touches[0].clientX-sx; const dy=e.touches[0].clientY-sy;
     if(!mv&&Math.abs(dx)>12&&Math.abs(dx)>Math.abs(dy)*1.5) mv=true;
@@ -1451,11 +1503,17 @@ function installHelp(){
 })();
 document.addEventListener('click',async e=>{
   const t=e.target;
+  if(S.lpAt&&Date.now()-S.lpAt<900){ S.lpAt=0; e.preventDefault(); return }
   const lg=t.closest('[data-lg]'); if(lg){ toast(lg.dataset.lg); return }
+  if(t.closest('#bell')){ openBell(); return }
+  const hy=t.closest('[data-hoy]'); if(hy){ openHoy(hy.dataset.hoy); return }
+  const bi=t.closest('[data-bulkign]'); if(bi){ const ks=[...S.sel]; const done=ignorar(ks); S.sel.clear(); S.selMode=false; render({keep:true}); notifyBadge(); if(done.length) toastAct(`🚫 ${done.length} pedido(s) ignorados`,'Deshacer',()=>{ designorar(done); render({keep:true}); notifyBadge() }); return }
+  const i1=t.closest('[data-ign1]'); if(i1){ const k=i1.dataset.ign1; const done=ignorar([k]); $('#sheet').classList.remove('on'); render({keep:true}); notifyBadge(); if(done.length) toastAct('🚫 Pedido ignorado','Deshacer',()=>{ designorar(done); render({keep:true}); notifyBadge() }); return }
+  const ui=t.closest('[data-unign]'); if(ui){ designorar([ui.dataset.unign]); toast('Pedido restaurado'); render({keep:true}); notifyBadge(); return }
   const v=t.closest('[data-view]'); if(v){S.view=v.dataset.view;S.focusQ=false;render({top:true}); if(S.mod==='prod'&&!S.stock.loaded&&!S.stock.loading) loadStock(); return}
   const pg=t.closest('[data-popgo]'); if(pg){ $('#sheet').classList.remove('on'); S.view='sheets';S.tab=ALL;S.filter='emb';S.q='';S.limit=60;S.focusQ=false;render({top:true});return }
   const dp=t.closest('[data-defper]'); if(dp){ const [k,n]=dp.dataset.defper.split(':'); CFG.defPer=n?{k,n:+n}:{k}; cfgSave(); toast('Predeterminado: '+perLabelOf(CFG.defPer)); render({keep:true}); return }
-  const hf=t.closest('[data-hf]'); if(hf){ const k=hf.dataset.hf; S.hf=(S.hf===k&&k!=='emb')?'emb':k; render({keep:true}); return }
+  const hf=t.closest('[data-hf]'); if(hf){ if(hf.closest('#sheet')&&S.view!=='home'){S.view='home'} $('#sheet').classList.remove('on'); const k=hf.dataset.hf; S.hf=(S.hf===k&&k!=='emb')?'emb':k; render({keep:true}); return }
   const gf=t.closest('[data-go]'); if(gf){S.view='sheets';S.tab=ALL;S.filter=gf.dataset.go;S.q='';S.limit=60;S.focusQ=false;render({top:true});return}
   const gt=t.closest('[data-go-tab]'); if(gt){S.view='sheets';S.tab=+gt.dataset.goTab;S.filter=(gt.dataset.gof&&gt.dataset.gof!=='hoy')?gt.dataset.gof:(gt.dataset.gof==='hoy'?'todos':'emb');S.q='';S.limit=60;S.focusQ=false;render({top:true});return}
   const tabEl=t.closest('[data-tab]'); if(tabEl){S.tab=+tabEl.dataset.tab;S.limit=60;S.focusQ=false;render({keep:true});return}
@@ -1511,6 +1569,7 @@ document.addEventListener('click',async e=>{
     if(ac.dataset.act==='shareapp') shareApp();
     if(ac.dataset.act==='installhelp') installHelp();
     if(ac.dataset.act==='group'){S.group=!S.group;ls.set('group',S.group?'1':'0');render({keep:true})}
+    if(ac.dataset.act==='perToggle'){ ls.set('percol',ls.get('percol')==='0'?'1':'0'); render({keep:true}); return }
     if(ac.dataset.act==='select'){S.selMode=!S.selMode;S.sel.clear();render({keep:true})}
     if(ac.dataset.act==='selall'){S.visible.forEach(k=>S.sel.add(k));render({keep:true})}
     return}
@@ -1551,7 +1610,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v33';
+const APP_V='v34';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

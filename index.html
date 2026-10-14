@@ -123,6 +123,23 @@ nav button.on{color:var(--coral-d)}
 #bulk button{border:0;border-radius:10px;padding:9px 12px;font-weight:700;font-size:13px;background:var(--coral);color:#fff}
 #bulk button.sec{background:rgba(255,255,255,.15)}
 button.alert{font-size:14px;color:var(--ink);font-family:inherit}
+.setcard{background:#fff;border-radius:18px;padding:4px 14px;margin-bottom:12px;border:1px solid var(--line)}
+.cfgrow{display:flex;align-items:center;justify-content:space-between;gap:10px;padding:12px 0;border-top:1px solid var(--line);font-size:14px}
+.cfgrow:first-child{border-top:0}
+.cfgrow .ctl{display:flex;align-items:center;gap:6px;flex:none}
+.mv{border:0;background:var(--peach-l);color:var(--coral-d);border-radius:10px;width:34px;height:34px;font-size:15px;font-weight:800}
+.sw2{appearance:none;-webkit-appearance:none;width:46px;height:28px;border-radius:99px;background:#e3d8cf;position:relative;border:0;flex:none;padding:0}
+.sw2::after{content:'';position:absolute;top:3px;left:3px;width:22px;height:22px;border-radius:50%;background:#fff;transition:left .15s}
+.sw2.on{background:var(--coral)}
+.sw2.on::after{left:21px}
+#tour{position:fixed;inset:0;z-index:9999}
+#tour .hole{position:fixed;border-radius:14px;box-shadow:0 0 0 9999px rgba(58,52,49,.72);border:2px solid var(--coral);transition:all .25s;pointer-events:none}
+#tour .tip{position:fixed;left:12px;right:12px;background:#fff;border-radius:18px;padding:14px 16px;box-shadow:0 8px 30px rgba(0,0,0,.3);font-size:14px;line-height:1.45;max-width:420px;margin:0 auto}
+#tour .tip h4{margin:0 0 6px;font-size:16px;color:var(--coral-d)}
+#tour .tb{display:flex;justify-content:space-between;align-items:center;gap:8px;margin-top:12px}
+#tour .tb span{font-size:12px;color:#8a7d75}
+#tour .tb button{border:0;border-radius:99px;padding:9px 16px;font-weight:700;background:var(--coral);color:#fff}
+#tour .tb button.sk{background:var(--peach-l);color:var(--coral-d)}
 </style>
 </head>
 <body>
@@ -351,6 +368,73 @@ async function toggle(si,row,c){
   catch(e){ toast('No se pudo guardar: '+e.message,4500) }
 }
 
+/* ---------- Ajustes (se guardan en este dispositivo) ---------- */
+const SECLBL={install:'Botón de instalar',kpis:'Tarjetas de resumen',alerts:'Avisos (demorados, sin pago, notificaciones)',share:'Botón compartir lista',sheets:'Para embalar por planilla',totals:'Total por tamaño y formato',period:'Selector de período'};
+const KPILBL={emb:'Para embalar',desp:'Embalados, sin despachar',prod:'En producción',late:'Demorados',nopago:'Sin pago',canc:'Cancelados'};
+const CFG_DEF={order:['install','kpis','alerts','share','sheets','totals','period'],hide:{},kpis:{emb:1,desp:1,prod:1,late:0,nopago:0,canc:1},sheets:{0:1,1:1,2:1},start:'home'};
+function cfgLoad(){
+  let c={}; try{ c=JSON.parse(ls.get('cfg')||'{}') }catch(e){}
+  const d=JSON.parse(JSON.stringify(CFG_DEF));
+  const o=Array.isArray(c.order)?c.order.filter(k=>d.order.includes(k)):[];
+  d.order.forEach(k=>{ if(!o.includes(k)) o.push(k) });
+  return {order:o,hide:Object.assign(d.hide,c.hide||{}),kpis:Object.assign(d.kpis,c.kpis||{}),sheets:Object.assign(d.sheets,c.sheets||{}),start:c.start||'home'};
+}
+let CFG=cfgLoad();
+function cfgSave(){ ls.set('cfg',JSON.stringify(CFG)) }
+function cfgToggle(k){
+  const [type,key]=k.split(':');
+  if(type==='sec') CFG.hide[key]=!CFG.hide[key];
+  else if(type==='kpi') CFG.kpis[key]=CFG.kpis[key]?0:1;
+  else if(type==='sheet') CFG.sheets[key]=CFG.sheets[key]?0:1;
+  else if(type==='group'){ S.group=!S.group; ls.set('group',S.group?'1':'0') }
+  else if(type==='start') CFG.start=key;
+  cfgSave(); render({keep:true});
+}
+function cfgMove(m){
+  const [key,d]=m.split(':'); const i=CFG.order.indexOf(key), j=i+(+d);
+  if(i<0||j<0||j>=CFG.order.length) return;
+  [CFG.order[i],CFG.order[j]]=[CFG.order[j],CFG.order[i]]; cfgSave(); render({keep:true});
+}
+function shareApp(){
+  const url=location.origin+location.pathname;
+  if(navigator.share) navigator.share({title:'Jake Central',url}).catch(()=>{});
+  else if(navigator.clipboard) navigator.clipboard.writeText(url).then(()=>toast('Link copiado'));
+  else toast(url,5000);
+}
+
+/* ---------- Tour guiado ---------- */
+const TOUR=[
+ {v:'home',sel:'.brand',t:'Bienvenido a Jake Central',x:'Tocá el logo en cualquier momento para volver al Inicio.'},
+ {v:'home',sel:'.kpis',t:'Resumen',x:'Cada tarjeta cuenta pedidos. Tocá una y te lleva a esa lista ya filtrada. “Para embalar” = Imp, Prep Vin y Pegar tildados.'},
+ {v:'home',sel:'.sec',t:'Por planilla',x:'Acá ves qué embalar de cada planilla, por tamaño y formato.'},
+ {v:'sheets',sel:'.tabs',t:'Pedidos',x:'Elegí Todas, MercadoLibre, TiendaNube o Reclamos.'},
+ {v:'sheets',sel:'.chips',t:'Filtros',x:'Deslizá de lado para filtrar: para embalar, demorados, sin pago, cancelados…'},
+ {v:'sheets',sel:'.card',t:'Un pedido',x:'Tocá los tildes (Imprimir, Preparar, Pegar, Embalar, Despachar). Al tildar Despachar se carga sola la fecha de envío. Tocá la tarjeta para editar cualquier columna.'},
+ {v:'sheets',sel:'[data-act=select]',t:'Acciones',x:'Seleccionar varios para embalar/despachar de una, agrupar por tamaño y compartir la lista.'},
+ {v:'sheets',sel:'#mic',t:'Asistente de voz',x:'Tocá el micrófono y decí, por ejemplo: “embalar el pedido de María”. Se puede deshacer.'},
+ {v:'config',sel:'nav button[data-view=config]',t:'Ajustes',x:'Acá ocultás y ordenás las secciones del Inicio, cambiás reglas, actualizás datos, cerrás sesión y compartís la app. Podés repetir esta guía desde Ajustes.'}
+];
+let tourI=-1;
+function tourStop(){ tourI=-1; const t=document.getElementById('tour'); if(t) t.remove(); ls.set('toured','1') }
+function tourShow(i){
+  if(i>=TOUR.length){ tourStop(); S.view='home'; render(); return }
+  tourI=i; const st=TOUR[i];
+  if(S.view!==st.v){ S.view=st.v; render({keep:true}) }
+  setTimeout(()=>{
+    let el=document.querySelector(st.sel);
+    if(!el){ tourShow(i+1); return }
+    el.scrollIntoView({block:'center'});
+    setTimeout(()=>{
+      const r=el.getBoundingClientRect(); let t=document.getElementById('tour');
+      if(!t){ t=document.createElement('div'); t.id='tour'; document.body.appendChild(t) }
+      const pad=6, below=r.top<innerHeight/2;
+      t.innerHTML=`<div class="hole" style="top:${r.top-pad}px;left:${r.left-pad}px;width:${Math.min(r.width,innerWidth)+pad*2}px;height:${Math.min(r.height,innerHeight*.5)+pad*2}px"></div>
+      <div class="tip" style="${below?'bottom:16px':'top:16px'}"><h4>${st.t}</h4>${st.x}<div class="tb"><span>${i+1} / ${TOUR.length}</span><span style="flex:1"></span><button class="sk" data-tour="skip">Salir</button><button data-tour="next">${i===TOUR.length-1?'Listo':'Siguiente'}</button></div></div>`;
+    },250);
+  },120);
+}
+function tourStart(){ S.view='home'; render(); tourShow(0) }
+
 /* ---------- Render ---------- */
 function matches(it,D,st){
   const q=norm(S.q.trim());
@@ -393,28 +477,69 @@ function renderHome(){
   if(S.loading&&!S.data[0]) return '<div class="skel"></div><div class="skel"></div>';
   if(!S.data[0]) return `<div class="msg">${esc(S.err||'Sin datos')}<br><br><button class="chip" data-act="reload">Reintentar</button></div>`;
   const sum=summarize();
-  let h=`<div style="margin:0 0 10px">${installBtn()}</div><div class="hello">Hoy<b>Pedidos Jake</b></div>
-  <div class="kpis">
-    <button class="kpi main" data-go="emb"><span>Para embalar</span><b>${sum.emb.length}</b></button>
-    <button class="kpi" data-go="desp"><span>Embalados, sin despachar</span><b>${sum.desp}</b></button>
-    <button class="kpi" data-go="prod"><span>En producción</span><b>${sum.prod}</b></button>
-    <button class="kpi red" data-go="canc"><span>Cancelados</span><b>${sum.canc}</b></button></div>`;
-  if(window.Notification && Notification.permission==='default') h+=`<div class="alert" style="margin-top:12px">🔔 Activá los avisos para que te avise cuántos pedidos hay para embalar.<button data-act="notif">Activar</button></div>`;
-  if(sum.late) h+=`<button class="alert" style="margin-top:12px;display:block;width:100%;text-align:left" data-go="late">⏰ ${sum.late} pedido(s) llevan más de ${S.late} días sin despachar. <b>Ver</b></button>`;
-  if(sum.sinPago) h+=`<button class="alert" style="margin-top:12px;display:block;width:100%;text-align:left" data-go="nopago">Hay ${sum.sinPago} pedido(s) sin pago confirmado. <b>Ver</b></button>`;
-  h+=`<div class="sec">Para embalar por planilla</div><div style="margin:0 2px 10px"><button class="chip" data-act="share">⇪ Compartir lista de embalado</button></div>`;
-  sum.perSheet.forEach(p=>{
-    const keys=Object.keys(p.tipos).sort((a,b)=>p.tipos[b]-p.tipos[a]);
-    h+=`<div class="ch"><div class="r"><b>${SHEETS[p.si].label}</b><span class="n">${p.emb.length}</span></div>`+
-      (keys.length?`<ul>${keys.map(k=>`<li><span>${esc(k)}</span><i>${p.tipos[k]}</i></li>`).join('')}</ul>`:'<div class="note">Nada para embalar</div>')+
-      `<div class="note">Embalados sin despachar: ${p.desp} · En producción: ${p.prod}${p.canc?` · Cancelados: ${p.canc}`:''}</div>`+
-      `<button class="go" data-go-tab="${p.si}">Ver pedidos de ${SHEETS[p.si].short}</button></div>`;
-  });
-  const tt=totalTipos(sum); const tk=Object.keys(tt).sort((a,b)=>tt[b]-tt[a]);
-  if(tk.length) h+=`<div class="sec">Total para embalar por tamaño y formato</div><div class="ch"><ul style="margin:0">${tk.map(k=>`<li><span>${esc(k)}</span><i>${tt[k]}</i></li>`).join('')}</ul></div>`;
-  h+=`<div class="sec">Período analizado</div><div class="chips">${[[30,'30 días'],[60,'60 días'],[90,'90 días'],[0,'Todo']].map(([d,l])=>`<button class="chip ${S.days===d?'on':''}" data-days="${d}">${l}</button>`).join('')}</div>
-  <div class="note">Para embalar = Imp, Prep Vin y Pegar tildados, sin Embalar ni cancelar. Los pedidos más viejos que el período no cuentan.${S.loadedAt?` · Actualizado ${new Date(S.loadedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}`:''}</div>`;
-  return h;
+  const parts={
+    install:()=>{const b=installBtn(); return b?`<div style="margin:0 0 10px">${b}</div>`:''},
+    kpis:()=>{
+      const K=[['emb',sum.emb.length,'main'],['desp',sum.desp,''],['prod',sum.prod,''],['late',sum.late,''],['nopago',sum.sinPago,''],['canc',sum.canc,'red']].filter(k=>CFG.kpis[k[0]]);
+      return K.length?`<div class="kpis">${K.map(([k,n,c])=>`<button class="kpi ${c}" data-go="${k}"><span>${KPILBL[k]}</span><b>${n}</b></button>`).join('')}</div>`:'';
+    },
+    alerts:()=>{
+      let h='';
+      if(window.Notification && Notification.permission==='default') h+=`<div class="alert" style="margin-top:12px">🔔 Activá los avisos para que te avise cuántos pedidos hay para embalar.<button data-act="notif">Activar</button></div>`;
+      if(sum.late) h+=`<button class="alert" style="margin-top:12px;display:block;width:100%;text-align:left" data-go="late">⏰ ${sum.late} pedido(s) llevan más de ${S.late} días sin despachar. <b>Ver</b></button>`;
+      if(sum.sinPago) h+=`<button class="alert" style="margin-top:12px;display:block;width:100%;text-align:left" data-go="nopago">Hay ${sum.sinPago} pedido(s) sin pago confirmado. <b>Ver</b></button>`;
+      return h;
+    },
+    share:()=>`<div style="margin:12px 2px 0"><button class="chip" data-act="share">⇪ Compartir lista de embalado</button></div>`,
+    sheets:()=>{
+      const list=sum.perSheet.filter(p=>CFG.sheets[p.si]); if(!list.length) return '';
+      return `<div class="sec">Para embalar por planilla</div>`+list.map(p=>{
+        const keys=Object.keys(p.tipos).sort((a,b)=>p.tipos[b]-p.tipos[a]);
+        return `<div class="ch"><div class="r"><b>${SHEETS[p.si].label}</b><span class="n">${p.emb.length}</span></div>`+
+          (keys.length?`<ul>${keys.map(k=>`<li><span>${esc(k)}</span><i>${p.tipos[k]}</i></li>`).join('')}</ul>`:'<div class="note">Nada para embalar</div>')+
+          `<div class="note">Embalados sin despachar: ${p.desp} · En producción: ${p.prod}${p.canc?` · Cancelados: ${p.canc}`:''}</div>`+
+          `<button class="go" data-go-tab="${p.si}">Ver pedidos de ${SHEETS[p.si].short}</button></div>`;
+      }).join('');
+    },
+    totals:()=>{
+      const tt=totalTipos(sum); const tk=Object.keys(tt).sort((a,b)=>tt[b]-tt[a]);
+      return tk.length?`<div class="sec">Total para embalar por tamaño y formato</div><div class="ch"><ul style="margin:0">${tk.map(k=>`<li><span>${esc(k)}</span><i>${tt[k]}</i></li>`).join('')}</ul></div>`:'';
+    },
+    period:()=>`<div class="sec">Período analizado</div><div class="chips">${[[30,'30 días'],[60,'60 días'],[90,'90 días'],[0,'Todo']].map(([d,l])=>`<button class="chip ${S.days===d?'on':''}" data-days="${d}">${l}</button>`).join('')}</div>
+      <div class="note">Para embalar = Imp, Prep Vin y Pegar tildados, sin Embalar ni cancelar.${S.loadedAt?` · Actualizado ${new Date(S.loadedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}`:''}</div>`
+  };
+  return `<div class="hello">Hoy<b>Pedidos Jake</b></div>`+CFG.order.filter(k=>!CFG.hide[k]).map(k=>parts[k]?parts[k]():'').join('');
+}
+function renderConfig(){
+  const sw=(on,att)=>`<button class="sw2 ${on?'on':''}" ${att}></button>`;
+  const notif=!window.Notification?'No disponible en este navegador':Notification.permission==='granted'?'Activados ✓':Notification.permission==='denied'?'Bloqueados (activalos en los ajustes del sitio)':'Desactivados';
+  return `<div class="hello">Ajustes<b>Configuración</b></div>
+  <div class="sec">Pantalla de inicio · orden y visibilidad</div>
+  <div class="setcard">${CFG.order.map(k=>`<div class="cfgrow"><span>${SECLBL[k]}</span><span class="ctl"><button class="mv" data-move="${k}:-1">↑</button><button class="mv" data-move="${k}:1">↓</button>${sw(!CFG.hide[k],`data-cfg="sec:${k}"`)}</span></div>`).join('')}</div>
+  <div class="sec">Tarjetas de resumen</div>
+  <div class="setcard">${Object.keys(KPILBL).map(k=>`<div class="cfgrow"><span>${KPILBL[k]}</span>${sw(CFG.kpis[k],`data-cfg="kpi:${k}"`)}</div>`).join('')}</div>
+  <div class="sec">Planillas en el Inicio</div>
+  <div class="setcard">${SHEETS.map((s,i)=>`<div class="cfgrow"><span>${s.label}</span>${sw(CFG.sheets[i],`data-cfg="sheet:${i}"`)}</div>`).join('')}</div>
+  <div class="sec">Reglas</div>
+  <div class="setcard">
+    <div class="cfgrow" style="display:block"><span>Período de pedidos que cuentan</span><div class="chips">${[[30,'30 días'],[60,'60 días'],[90,'90 días'],[0,'Todo']].map(([d,l])=>`<button class="chip ${S.days===d?'on':''}" data-days="${d}">${l}</button>`).join('')}</div></div>
+    <div class="cfgrow" style="display:block"><span>Un pedido está demorado después de</span><div class="chips">${[3,5,7,10,14].map(d=>`<button class="chip ${S.late===d?'on':''}" data-late="${d}">${d} días</button>`).join('')}</div></div>
+    <div class="cfgrow"><span>Agrupar por tamaño en "Para embalar"</span>${sw(S.group,'data-cfg="group:1"')}</div>
+    <div class="cfgrow" style="display:block"><span>Abrir la app en</span><div class="chips"><button class="chip ${CFG.start==='home'?'on':''}" data-cfg="start:home">Inicio</button><button class="chip ${CFG.start==='sheets'?'on':''}" data-cfg="start:sheets">Pedidos</button></div></div>
+  </div>
+  <div class="sec">Avisos</div>
+  <div class="setcard"><div class="cfgrow"><span>Notificaciones diarias: ${notif}</span>${(window.Notification&&Notification.permission==='default')?'<button class="chip on" data-act="notif">Activar</button>':''}</div></div>
+  <div class="sec">Acceso de otras personas</div>
+  <div class="setcard"><div class="cfgrow" style="display:block;line-height:1.5"><span style="font-weight:400">Cualquier persona con una cuenta de Google que tenga acceso a la planilla “Planillas de PEDIDOS” puede usar la app con su mail. Si no tiene acceso a la planilla, no puede ver ni editar nada. Para sumar a alguien: compartile la planilla desde Google Sheets y pasale el link de la app.</span>
+    <div class="chips" style="margin-top:10px"><button class="chip on" data-act="opensheet">Abrir planilla para compartir</button><button class="chip" data-act="shareapp">⇪ Compartir link de la app</button></div></div></div>
+  <div class="sec">Cuenta y datos</div>
+  <div class="setcard">
+    <div class="cfgrow"><span>Guía paso a paso de la app</span><button class="chip on" data-act="tour">▶ Ver guía</button></div>
+    <div class="cfgrow"><span>Actualizar los datos ahora</span><button class="chip" data-act="reload">⟳ Actualizar</button></div>
+    ${isStandalone()?'':`<div class="cfgrow"><span>Instalar en el teléfono</span>${installBtn()}</div>`}
+    <div class="cfgrow"><span>Restablecer ajustes del Inicio</span><button class="chip" data-act="cfgreset">Restablecer</button></div>
+    <div class="cfgrow"><span>Cerrar sesión en este dispositivo</span><button class="chip" data-act="logout">Salir</button></div>
+  </div>`;
 }
 function renderSheets(){
   let body='';
@@ -460,15 +585,14 @@ function render(opt={}){
   if(!clientId()) return renderSetup();
   if(!token) return renderLogin();
   const home=S.view==='home';
-  if(home) S.selMode=false;
+  if(S.view!=='sheets') S.selMode=false;
   $('#app').innerHTML=`<header><div class="top">
       <button class="brand" data-view="home" aria-label="Inicio"><img src="jk-192.png" alt="Jake"><b>Jake Central</b></button>
-      <button class="ibtn" data-act="reload" title="Actualizar">⟳</button><button class="ibtn" id="lo" title="Salir">⎋</button></div>
-      ${home?'':`<div class="tabs" style="padding-bottom:0"></div>`}
+      </div>
     </header>
-    ${home?`<div id="home">${renderHome()}</div>`:renderSheets()}
+    ${home?`<div id="home">${renderHome()}</div>`:S.view==='config'?`<div id="home">${renderConfig()}</div>`:renderSheets()}
     ${S.selMode?'':'<button id="mic" title="Hablar">🎤</button>'}
-    <nav><button class="${home?'on':''}" data-view="home"><b>⌂</b>Inicio</button><button class="${!home?'on':''}" data-view="sheets"><b>☰</b>Pedidos</button></nav>`;
+    <nav><button class="${home?'on':''}" data-view="home"><b>⌂</b>Inicio</button><button class="${S.view==='sheets'?'on':''}" data-view="sheets"><b>☰</b>Pedidos</button><button class="${S.view==='config'?'on':''}" data-view="config"><b>⚙</b>Ajustes</button></nav>`;
   // restaurar desplazamientos horizontales (chips y pestañas) para que no salten al inicio
   document.querySelectorAll('.chips,.tabs').forEach((el,i)=>{ if(scrolls[i]!=null) el.scrollLeft=scrolls[i] });
   const hh=document.querySelector('header').offsetHeight; document.documentElement.style.setProperty('--hh',hh+'px');
@@ -696,6 +820,10 @@ document.addEventListener('click',async e=>{
   const dy=t.closest('[data-days]'); if(dy){S.days=+dy.dataset.days;ls.set('days',S.days);render({keep:true});notifyBadge();return}
   const sl=t.closest('[data-sel]'); if(sl){const k=sl.dataset.sel; S.sel.has(k)?S.sel.delete(k):S.sel.add(k); render({keep:true}); return}
   const bk=t.closest('[data-bulk]'); if(bk){bulk(bk.dataset.bulk);return}
+  const tr=t.closest('[data-tour]'); if(tr){ tr.dataset.tour==='skip'?tourStop():tourShow(tourI+1); return }
+  const cf=t.closest('[data-cfg]'); if(cf){ cfgToggle(cf.dataset.cfg); return }
+  const mv=t.closest('[data-move]'); if(mv){ cfgMove(mv.dataset.move); return }
+  const lt=t.closest('[data-late]'); if(lt){ S.late=+lt.dataset.late; ls.set('late',S.late); render({keep:true}); notifyBadge(); return }
   const tg=t.closest('[data-t]'); if(tg){const [si,r,c]=tg.dataset.t.split(':').map(Number);toggle(si,r,c);return}
   const ed=t.closest('[data-e]'); if(ed){const [si,r]=ed.dataset.e.split(':').map(Number);openEdit(si,r);return}
   if(t.id==='mic'){openVoice();return}
@@ -705,6 +833,11 @@ document.addEventListener('click',async e=>{
   const ac=t.closest('[data-act]'); if(ac){ if(ac.dataset.act==='reload') loadAll(); if(ac.dataset.act==='notif') askNotif();
     if(ac.dataset.act==='share') shareList();
     if(ac.dataset.act==='install') doInstall();
+    if(ac.dataset.act==='tour') tourStart();
+    if(ac.dataset.act==='logout'){token=null;tokenExp=0;ls.set('signed','');ls.set('tok','');render()}
+    if(ac.dataset.act==='cfgreset'){CFG=JSON.parse(JSON.stringify(CFG_DEF));cfgSave();render({keep:true});toast('Ajustes restablecidos')}
+    if(ac.dataset.act==='opensheet') window.open('https://docs.google.com/spreadsheets/d/'+SPREADSHEET_ID+'/edit','_blank');
+    if(ac.dataset.act==='shareapp') shareApp();
     if(ac.dataset.act==='installhelp') installHelp();
     if(ac.dataset.act==='group'){S.group=!S.group;ls.set('group',S.group?'1':'0');render({keep:true})}
     if(ac.dataset.act==='select'){S.selMode=!S.selMode;S.sel.clear();render({keep:true})}
@@ -729,9 +862,11 @@ document.addEventListener('visibilitychange',async()=>{
 
 window.addEventListener('load',()=>{
   if(!ls.get('email')) ls.set('email','fakundo713@gmail.com');
+  S.view=CFG.start||'home';
   if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
   render({top:true});
   if(token) loadAll();
+  if(!ls.get('toured')) setTimeout(()=>{ if(token&&S.data[0]) tourStart() },4000);
   if(clientId()&&ls.get('signed')==='1'){
     let n=0;const iv=setInterval(async()=>{
       if(window.google&&google.accounts){

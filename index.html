@@ -177,6 +177,10 @@ button.alert{font-size:14px;color:var(--ink);font-family:inherit}
 .orow1 b{flex:1;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;font-size:15px}.orow1 i{font-style:normal;color:#c5b9b1;font-size:20px}
 .ohead{display:flex;justify-content:space-between;align-items:flex-start;gap:10px;margin-bottom:8px}.ow{font-size:21px;font-weight:800;letter-spacing:-.01em}.od{font-size:14px;color:var(--mut);margin-top:2px}
 .card .t,.od,.orow1 b{white-space:pre-line}
+.pophd{font-size:15px;font-weight:700;color:var(--mut);margin-bottom:8px}
+.popbig{display:block;width:100%;text-align:left;background:var(--coral);color:#fff;border:0;border-radius:22px;padding:18px}.popbig b{display:block;font-size:54px;line-height:1;letter-spacing:-.03em}.popbig span{font-size:13px;opacity:.95}
+.popsec{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin:16px 0 8px}
+.pchips{display:flex;flex-wrap:wrap;gap:8px}.pchip{background:var(--peach-l);border-radius:14px;padding:9px 14px;font-size:15px;font-weight:600}.pchip b{color:var(--coral-d);margin-right:2px}
 </style>
 </head>
 <body>
@@ -302,6 +306,19 @@ function parseSheet(i, rows, raw){
   }
   S.data[i]={head,cols,isBool,dateMode,items,h};
 }
+function showPopup(){
+  const sum=summarize(), n=sum.emb.length, tt=totalTipos(sum);
+  const sz={}, fm={};
+  sum.perSheet.forEach(pp=>{ const D=S.data[pp.si]; pp.emb.forEach(it=>tipos(it,D).forEach(k=>{
+    const m=k.match(/^Set de (\d)(?: (\w+))? · (\w+)$/);
+    if(m){ const a=m[1]+(m[2]||''); sz[a]=(sz[a]||0)+1; fm[m[3]]=(fm[m[3]]||0)+1 } else { sz[k]=(sz[k]||0)+1 } }))});
+  const chips=o=>Object.entries(o).sort((a,b)=>b[1]-a[1]).map(([k,v])=>`<span class="pchip"><b>${v}</b> ${esc(k)}</span>`).join('');
+  $('#sp').innerHTML=`<div class="pophd">📦 Pedidos para embalar</div>
+  <button class="popbig" data-popgo="1"><b>${n}</b><span>${n===1?'pedido':'pedidos'} para embalar · ${perLabel()}${CFG.nodate?' · sin contar los pedidos sin fecha':''}</span></button>
+  ${n?`<div class="popsec">Por tamaño</div><div class="pchips">${chips(sz)}</div>${Object.keys(fm).length?`<div class="popsec">Por formato</div><div class="pchips">${chips(fm)}</div>`:''}`:'<div class="note" style="text-align:center">No hay nada para embalar en este período.</div>'}
+  <div class="row"><button class="sec2" id="cx">Cerrar</button>${n?'<button class="pri" data-popgo="1">Ver pedidos</button>':''}</div>`;
+  $('#sheet').classList.add('on'); $('#sheet').dataset.mode='pop';
+}
 async function loadAll(){
   S.loading=true; render();
   try{
@@ -315,6 +332,7 @@ async function loadAll(){
     S.loadedAt=Date.now();
   }catch(e){S.err=e.message;toast(e.message,4500)}
   S.loading=false; render(); notifyBadge(); notifyIfNeeded();
+  if(CFG.popup&&!S.popShown&&S.data[0]&&!S.err){ S.popShown=1; showPopup() }
 }
 
 /* ---------- Reglas ---------- */
@@ -330,8 +348,9 @@ function perBounds(){
   if(p.k==='custom'){ const f=p.from?new Date(p.from+'T00:00:00').getTime():-Infinity, t=p.to?new Date(p.to+'T23:59:59').getTime():Infinity; return [f,t] }
   return [-Infinity,Infinity];
 }
-function perLabel(){
-  const p=S.per||{}; const L={today:'Hoy',d3:'Últimos 3 días',week:'Esta semana',month:'Este mes',all:'Todo'};
+function perLabel(){ return perLabelOf(S.per) }
+function perLabelOf(p){
+  p=p||{}; const L={today:'Hoy',d3:'Últimos 3 días',week:'Esta semana',month:'Este mes',all:'Todo'};
   if(L[p.k]) return L[p.k]; if(p.k==='n') return p.n>0?`Últimos ${p.n} días`:'Todo';
   const f=x=>x?x.split('-').reverse().join('/'):'…'; return `${f(p.from)} → ${f(p.to)}`;
 }
@@ -344,6 +363,7 @@ function perUI(){
   <div class="chips pc">${pre.map(([k,l])=>{const [kk,nn]=k.split(':');return `<button class="chip ${on(kk,nn?+nn:undefined)}" data-per="${k}">${l}</button>`}).join('')}<button class="chip ${custom||S.perOpen?'on':''}" data-act="perOpen">✎ Personalizar</button></div>
   ${(S.perOpen||custom)?`<div class="perx"><label>Últimos <input type="number" min="1" id="pn" value="${p.k==='n'?p.n:''}" placeholder="N"> días</label></div>
   <div class="perx"><label>Desde <input type="date" id="pf" value="${p.k==='custom'?p.from||'':''}"></label><label>hasta <input type="date" id="pt" value="${p.k==='custom'?p.to||'':''}"></label></div>`:''}
+  <div class="pernd"><span>Predeterminado al abrir: <b>${perLabelOf(CFG.defPer)}</b></span><button class="chip ${JSON.stringify(CFG.defPer)===JSON.stringify(S.per)?'on':''}" data-act="defper">★ Usar este</button></div>
   <div class="pernd"><span>Ignorar pedidos sin fecha</span><button class="sw2 ${CFG.nodate?'on':''}" data-cfg="nodate:1"></button></div></div>`;
 }
 function setPer(o){ S.per=o; ls.set('per',JSON.stringify(o)); render({keep:true}); notifyBadge() }
@@ -410,7 +430,7 @@ async function notifyIfNeeded(){
   if(!S.data[0]) return;
   const sum=summarize(), total=sum.emb.length;
   const today=new Date().toDateString();
-  if(ls.get('notifDay')===today) return;
+  if(!CFG.notif||ls.get('notifDay')===today) return;
   if(window.Notification && Notification.permission==='granted' && total>0){
     const body=sum.perSheet.filter(p=>p.emb.length).map(p=>`${SHEETS[p.si].short}: ${p.emb.length}`).join(' · ');
     try{ const reg=await navigator.serviceWorker.ready;
@@ -463,16 +483,17 @@ async function toggle(si,row,c){
 /* ---------- Ajustes (se guardan en este dispositivo) ---------- */
 const SECLBL={install:'Botón de instalar',kpis:'Tarjetas de resumen',alerts:'Avisos (demorados, sin pago, notificaciones)',share:'Botón compartir lista',sheets:'Para embalar por planilla',totals:'Total por tamaño y formato',period:'Selector de período'};
 const KPILBL={emb:'Para embalar',desp:'Embalados, sin despachar',prod:'En producción',late:'Demorados',nopago:'Sin pago',canc:'Cancelados'};
-const CFG_DEF={order:['period','install','kpis','alerts','share','sheets','totals'],hide:{},kpis:{emb:1,desp:1,prod:1,late:0,nopago:0,canc:1},sheets:{0:1,1:1,2:1},start:'home',nodate:1};
+const CFG_DEF={order:['period','install','kpis','alerts','share','sheets','totals'],hide:{},kpis:{emb:1,desp:1,prod:1,late:0,nopago:0,canc:1},sheets:{0:1,1:1,2:1},start:'home',nodate:1,notif:1,popup:1,defPer:{k:'week'}};
 function cfgLoad(){
   let c={}; try{ c=JSON.parse(ls.get('cfg')||'{}') }catch(e){}
   if(c.v!==3){ c.order=null; c.v=3 }
   const d=JSON.parse(JSON.stringify(CFG_DEF));
   const o=Array.isArray(c.order)?c.order.filter(k=>d.order.includes(k)):[];
   d.order.forEach(k=>{ if(!o.includes(k)) o.push(k) });
-  return {v:3,order:o,hide:Object.assign(d.hide,c.hide||{}),kpis:Object.assign(d.kpis,c.kpis||{}),sheets:Object.assign(d.sheets,c.sheets||{}),start:c.start||'home',nodate:c.nodate===undefined?1:c.nodate};
+  return {v:3,order:o,hide:Object.assign(d.hide,c.hide||{}),kpis:Object.assign(d.kpis,c.kpis||{}),sheets:Object.assign(d.sheets,c.sheets||{}),start:c.start||'home',nodate:c.nodate===undefined?1:c.nodate,notif:c.notif===undefined?1:c.notif,popup:c.popup===undefined?1:c.popup,defPer:c.defPer||{k:'week'}};
 }
 let CFG=cfgLoad();
+S.per=CFG.defPer;
 function cfgSave(){ ls.set('cfg',JSON.stringify(CFG)) }
 function cfgToggle(k){
   const [type,key]=k.split(':');
@@ -481,6 +502,8 @@ function cfgToggle(k){
   else if(type==='sheet') CFG.sheets[key]=CFG.sheets[key]?0:1;
   else if(type==='group'){ S.group=!S.group; ls.set('group',S.group?'1':'0') }
   else if(type==='start') CFG.start=key;
+  else if(type==='notif'){ CFG.notif=CFG.notif?0:1; if(CFG.notif&&window.Notification&&Notification.permission==='default') askNotif() }
+  else if(type==='popup') CFG.popup=CFG.popup?0:1;
   else if(type==='nodate'){ CFG.nodate=CFG.nodate?0:1; notifyBadge() }
   cfgSave(); render({keep:true});
 }
@@ -597,7 +620,6 @@ function renderHome(){
     },
     alerts:()=>{
       let h='';
-      if(window.Notification && Notification.permission==='default') h+=`<div class="alert" style="margin-top:12px">🔔 Activá los avisos para que te avise cuántos pedidos hay para embalar.<button data-act="notif">Activar</button></div>`;
       if(sum.late) h+=`<button class="alert" style="margin-top:12px;display:block;width:100%;text-align:left" data-go="late">⏰ ${sum.late} pedido(s) llevan más de ${S.late} días sin despachar. <b>Ver</b></button>`;
       if(sum.sinPago) h+=`<button class="alert" style="margin-top:12px;display:block;width:100%;text-align:left" data-go="nopago">Hay ${sum.sinPago} pedido(s) sin pago confirmado. <b>Ver</b></button>`;
       return h;
@@ -641,7 +663,12 @@ function renderConfig(){
     <div class="cfgrow" style="display:block"><span>Abrir la app en</span><div class="chips"><button class="chip ${CFG.start==='home'?'on':''}" data-cfg="start:home">Inicio</button><button class="chip ${CFG.start==='sheets'?'on':''}" data-cfg="start:sheets">Pedidos</button></div></div>
   </div>
   <div class="sec">Avisos</div>
-  <div class="setcard"><div class="cfgrow"><span>Notificaciones diarias: ${notif}</span>${(window.Notification&&Notification.permission==='default')?'<button class="chip on" data-act="notif">Activar</button>':''}</div></div>
+  <div class="setcard">
+    <div class="cfgrow"><span>Ventana al abrir la app con los pedidos para embalar</span>${sw(CFG.popup,'data-cfg="popup:1"')}</div>
+    <div class="cfgrow"><span>Notificación del teléfono una vez por día<br><small style="color:var(--mut)">Permiso: ${notif}</small></span>${sw(CFG.notif,'data-cfg="notif:1"')}</div>
+    ${(window.Notification&&Notification.permission==='denied'&&CFG.notif)?'<div class="note">El navegador las tiene bloqueadas: activalas en los ajustes del sitio del teléfono.</div>':''}
+    <div class="cfgrow"><span>Probar la ventana ahora</span><button class="chip on" data-act="popup">Ver</button></div>
+  </div>
   <div class="sec">Acceso de otras personas</div>
   <div class="setcard"><div class="cfgrow" style="display:block;line-height:1.5"><span style="font-weight:400">Cualquier persona con una cuenta de Google que tenga acceso a la planilla “Planillas de PEDIDOS” puede usar la app con su mail. Si no tiene acceso a la planilla, no puede ver ni editar nada. Para sumar a alguien: compartile la planilla desde Google Sheets y pasale el link de la app.</span>
     <div class="chips" style="margin-top:10px"><button class="chip on" data-act="opensheet">Abrir planilla para compartir</button><button class="chip" data-act="shareapp">⇪ Compartir link de la app</button></div></div></div>
@@ -986,6 +1013,7 @@ function installHelp(){
 document.addEventListener('click',async e=>{
   const t=e.target;
   const v=t.closest('[data-view]'); if(v){S.view=v.dataset.view;S.focusQ=false;render({top:true});return}
+  const pg=t.closest('[data-popgo]'); if(pg){ $('#sheet').classList.remove('on'); S.view='sheets';S.tab=ALL;S.filter='emb';S.q='';S.limit=60;S.focusQ=false;render({top:true});return }
   const gf=t.closest('[data-go]'); if(gf){S.view='sheets';S.tab=ALL;S.filter=gf.dataset.go;S.q='';S.limit=60;S.focusQ=false;render({top:true});return}
   const gt=t.closest('[data-go-tab]'); if(gt){S.view='sheets';S.tab=+gt.dataset.goTab;S.filter='emb';S.q='';S.limit=60;S.focusQ=false;render({top:true});return}
   const tabEl=t.closest('[data-tab]'); if(tabEl){S.tab=+tabEl.dataset.tab;S.limit=60;S.focusQ=false;render({keep:true});return}
@@ -1008,6 +1036,8 @@ document.addEventListener('click',async e=>{
   const ac=t.closest('[data-act]'); if(ac){ if(ac.dataset.act==='reload') loadAll(); if(ac.dataset.act==='notif') askNotif();
     if(ac.dataset.act==='share') shareList();
     if(ac.dataset.act==='install') doInstall();
+    if(ac.dataset.act==='defper'){ CFG.defPer=JSON.parse(JSON.stringify(S.per)); cfgSave(); toast('Predeterminado: '+perLabel()); render({keep:true}) }
+    if(ac.dataset.act==='popup'){ showPopup() }
     if(ac.dataset.act==='perOpen'){ S.perOpen=!S.perOpen; render({keep:true}) }
     if(ac.dataset.act==='tour') tourStart();
     if(ac.dataset.act==='logout'){token=null;tokenExp=0;ls.set('signed','');ls.set('tok','');render()}
@@ -1054,7 +1084,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v16';
+const APP_V='v17';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

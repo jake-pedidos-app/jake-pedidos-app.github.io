@@ -181,7 +181,7 @@ button.alert{font-size:14px;color:var(--ink);font-family:inherit}
 .popbig{display:block;width:100%;text-align:left;background:var(--coral);color:#fff;border:0;border-radius:22px;padding:18px}.popbig b{display:block;font-size:54px;line-height:1;letter-spacing:-.03em}.popbig span{font-size:13px;opacity:.95}
 .popsec{font-size:12px;font-weight:800;letter-spacing:.06em;text-transform:uppercase;color:var(--mut);margin:16px 0 8px}
 .pchips{display:flex;flex-wrap:wrap;gap:8px}.pchip{background:var(--peach-l);border-radius:14px;padding:9px 14px;font-size:15px;font-weight:600}.pchip b{color:var(--coral-d);margin-right:2px}
-.kpi.act{outline:2.5px solid var(--ink);outline-offset:-2px}
+.kpi.act{background:var(--coral);color:#fff}.kpi.act b,.kpi.act span{color:#fff}
 #home{padding-bottom:130px}#list{padding-bottom:130px}
 .orow1 small{flex:none;font-size:11px;color:#b5aaa3}
 .ch .r{padding-right:62px}
@@ -215,6 +215,10 @@ button.fl{padding:7px 11px;font-size:12.5px}
 .top{position:relative}
 .mdd{position:absolute;top:50px;left:0;background:#fff;border-radius:16px;box-shadow:0 12px 40px rgba(58,52,49,.28);padding:6px;z-index:30;min-width:210px}
 .mdd button{display:block;width:100%;text-align:left;background:none;border:0;padding:12px 14px;border-radius:12px;font-size:15px;font-weight:600;color:var(--ink)}.mdd button.on{background:var(--peach-l);color:var(--coral-d)}
+.orow1.st-sent{background:#BFE5CC}.orow1.st-pack{background:#E3F3E9}.orow1.st-pend{background:#FFF0D2}.orow1.st-canc{background:#FDE0DB}
+.orow1.st-sent,.orow1.st-pack,.orow1.st-pend,.orow1.st-canc{border-radius:14px;margin-bottom:6px;padding-left:10px;padding-right:10px;border:0}
+.legend{display:flex;gap:6px;flex-wrap:wrap;margin:0 2px 8px}.lg{font-size:11.5px;font-weight:700;border-radius:999px;padding:3px 10px;color:var(--ink)}.lg.st-sent{background:#BFE5CC}.lg.st-pack{background:#E3F3E9}.lg.st-pend{background:#FFF0D2}
+.swh2{display:flex;align-items:center;padding:0 16px;font-size:14px;font-weight:800;color:var(--ink);pointer-events:none}.swh2.mk{background:#CDEBDB}.swh2.um{background:#F9C9C2}
 </style>
 </head>
 <body>
@@ -392,7 +396,7 @@ function perLabelOf(p){
   const f=x=>x?x.split('-').reverse().join('/'):'…'; return `${f(p.from)} → ${f(p.to)}`;
 }
 function inWindow(it){ if(!it.date) return !CFG.nodate; const [a,b]=perBounds(), t=it.date.getTime(); return t>=a&&t<=b }
-function perUI(){
+function perUI(hideNd){
   const p=S.per||{}, on=(k,n)=>p.k===k&&(n===undefined||p.n===n)?'on':'';
   const pre=[['today','Hoy'],['d3','3 días'],['week','Esta semana'],['month','Este mes'],['n:30','30 días'],['n:60','60 días'],['n:90','90 días'],['all','Todo']];
   const custom=p.k==='custom'||(p.k==='n'&&![30,60,90].includes(p.n));
@@ -400,7 +404,7 @@ function perUI(){
   <div class="chips pc">${pre.map(([k,l])=>{const [kk,nn]=k.split(':');return `<button class="chip ${on(kk,nn?+nn:undefined)}" data-per="${k}">${l}</button>`}).join('')}<button class="chip ${custom||S.perOpen?'on':''}" data-act="perOpen">✎ Personalizar</button></div>
   ${(S.perOpen||custom)?`<div class="perx"><label>Últimos <input type="number" min="1" id="pn" value="${p.k==='n'?p.n:''}" placeholder="N"> días</label></div>
   <div class="perx"><label>Desde <input type="date" id="pf" value="${p.k==='custom'?p.from||'':''}"></label><label>hasta <input type="date" id="pt" value="${p.k==='custom'?p.to||'':''}"></label></div>`:''}
-  <div class="pernd"><span>Ignorar pedidos sin fecha</span><button class="sw2 ${CFG.nodate?'on':''}" data-cfg="nodate:1"></button></div></div>`;
+  ${hideNd?'':`<div class="pernd"><span>Ignorar pedidos sin fecha</span><button class="sw2 ${CFG.nodate?'on':''}" data-cfg="nodate:1"></button></div>`}</div>`;
 }
 function setPer(o){ S.per=o; ls.set('per',JSON.stringify(o)); render({keep:true}); notifyBadge() }
 function ageTxt(d){ if(!d) return ''; const n=Math.floor((new Date().setHours(0,0,0,0)-new Date(d).setHours(0,0,0,0))/86400000); return n<=0?'hoy':n===1?'ayer':`hace ${n} días` }
@@ -493,7 +497,10 @@ async function writeCells(si, item, changes){
   }
 }
 function findItem(si,row){return S.data[si].items.find(x=>x.row===row)}
+function touchLoad(){ let o={}; try{ o=JSON.parse(ls.get('touch')||'{}') }catch(e){} const d=new Date().toDateString(); if(o.day!==d) o={day:d,k:{}}; return o }
+function logTouch(si,row){ const o=touchLoad(); o.k[si+':'+row]=Date.now(); ls.set('touch',JSON.stringify(o)) }
 async function setField(si,row,c,nv,fechaOverride){
+  logTouch(si,row);
   const D=S.data[si]; const item=findItem(si,row);
   const ch={[c]:nv};
   if(c===D.cols.despachar && D.cols.fenvio>=0){
@@ -525,6 +532,7 @@ S.stock={items:[],loaded:false,loading:false,err:null,title:'Hoja 1',q:'',cat:'T
 const MODS={central:'Jake Central',prod:'Jake Producción'};
 const modName=k=>ls.get('modn_'+k)||MODS[k];
 const stkNote=n=>(!isNaN(+n)&&String(n).trim()!=='')?+n:0;
+function loadMod(){ return S.mod==='prod'?loadStock():loadAll() }
 async function loadStock(){
   S.stock.loading=true; render({keep:true});
   try{
@@ -578,7 +586,7 @@ function stkRow(x){
     <div class="sctl"><button class="sbtn" data-sadj="${x.row}:-1">−</button><button class="snum" data-sset="${x.row}">${x.stock}</button><button class="sbtn" data-sadj="${x.row}:1">+</button></div></div>`;
 }
 function renderStock(){
-  if(S.stock.loading&&!S.stock.loaded) return '<div id="home"><div class="skel"></div><div class="skel"></div></div>';
+  if((S.stock.loading||!S.stock.err)&&!S.stock.loaded) return '<div id="home"><div class="skel"></div><div class="skel"></div></div>';
   if(!S.stock.loaded) return `<div id="home"><div class="msg">${esc(S.stock.err||'Sin datos de stock')}<br><br><button class="chip" data-act="reload">Reintentar</button></div></div>`;
   const list=stkSorted(), withS=list.filter(x=>x.stock>0).length;
   return `<div class="bar" style="padding-top:12px"><input id="sq" type="search" placeholder="🔍 Buscar producto, código o categoría…" value="${esc(S.stock.q)}" autocomplete="off">
@@ -587,15 +595,15 @@ function renderStock(){
     ${list.map(stkRow).join('')||'<div class="empty">Nada para mostrar.</div>'}</div>`;
 }
 function renderPStart(){
-  if(S.stock.loading&&!S.stock.loaded) return '<div class="skel"></div><div class="skel"></div>';
+  if((S.stock.loading||!S.stock.err)&&!S.stock.loaded) return '<div class="skel"></div><div class="skel"></div>';
   if(!S.stock.loaded) return `<div class="msg">${esc(S.stock.err||'Sin datos')}<br><br><button class="chip" data-act="reload">Reintentar</button></div>`;
   const it=S.stock.items, tot=it.reduce((a,x)=>a+x.stock,0), low=it.filter(stkLow);
   const byCat={}; it.forEach(x=>{byCat[x.cat]=(byCat[x.cat]||0)+x.stock});
   return `<div class="hello">Producción<b>Stock e inventario</b></div>
-  <div class="kpis"><div class="kpi main"><span>Unidades en stock</span><b>${tot}</b></div><div class="kpi"><span>Productos con stock</span><b>${it.filter(x=>x.stock>0).length}</b></div></div>
-  ${low.length?`<div class="sec">⚠ Para reponer (punto de pedido)</div><div class="ch"><div class="olist">${low.map(x=>`<button class="orow1" data-sk="${x.row}"><span class="nm"><b>${esc(x.prod)}</b><em>${esc(x.code)} · punto de pedido ${x.pp}</em></span><span class="tp">${x.stock}</span><i>›</i></button>`).join('')}</div></div>`:'<div class="alert" style="margin-top:12px">✓ Nada por debajo del punto de pedido.</div>'}
+  ${CFG.phide.sum?'':`<div class="kpis"><div class="kpi act"><span>Unidades en stock</span><b>${tot}</b></div><div class="kpi"><span>Productos con stock</span><b>${it.filter(x=>x.stock>0).length}</b></div></div>`}
+  ${CFG.phide.low?'':low.length?`<div class="sec">⚠ Para reponer (punto de pedido)</div><div class="ch"><div class="olist">${low.map(x=>`<button class="orow1" data-sk="${x.row}"><span class="nm"><b>${esc(x.prod)}</b><em>${esc(x.code)} · punto de pedido ${x.pp}</em></span><span class="tp">${x.stock}</span><i>›</i></button>`).join('')}</div></div>`:'<div class="alert" style="margin-top:12px">✓ Nada por debajo del punto de pedido.</div>'}
   <div style="margin:12px 2px"><button class="chip on" data-act="syncCat">↻ Sincronizar con el catálogo de productos</button></div>
-  <div class="sec">Stock por categoría</div><div class="ch"><ul style="margin:0">${Object.entries(byCat).map(([k,v])=>`<li><span>${esc(k)}</span><i>${v}</i></li>`).join('')}</ul></div>`;
+  ${CFG.phide.cats?'':`<div class="sec">Stock por categoría</div><div class="ch"><ul style="margin:0">${Object.entries(byCat).map(([k,v])=>`<li><span>${esc(k)}</span><i>${v}</i></li>`).join('')}</ul></div>`}`;
 }
 function openQty(row,mode){
   const it=S.stock.items.find(x=>x.row===row); if(!it) return;
@@ -689,16 +697,16 @@ async function syncCatalog(){
 }
 
 /* ---------- Ajustes (se guardan en este dispositivo) ---------- */
-const SECLBL={install:'Botón de instalar',kpis:'Tarjetas de resumen',alerts:'Avisos (demorados, sin pago, notificaciones)',share:'Botón compartir lista',sheets:'Para embalar por planilla',totals:'Total por tamaño y formato',period:'Selector de período'};
+const SECLBL={install:'Botón de instalar',kpis:'Tarjetas de resumen',alerts:'Avisos (demorados, sin pago, notificaciones)',today:'Gestionados hoy (semáforo)',sheets:'Para embalar por planilla',totals:'Total por tamaño y formato',period:'Selector de período'};
 const KPILBL={hoy:'Despachados hoy',emb:'Para embalar',desp:'Embalados, sin despachar',prod:'En producción',late:'Demorados',nopago:'Sin pago',canc:'Cancelados'};
-const CFG_DEF={order:['period','install','kpis','alerts','share','sheets','totals'],hide:{},kpis:{hoy:1,emb:1,desp:1,prod:1,late:0,nopago:0,canc:1},sheets:{0:1,1:1,2:1},start:'home',nodate:1,notif:1,popup:1,defPer:{k:'week'}};
+const CFG_DEF={order:['period','install','kpis','alerts','sheets','totals','today'],hide:{},kpis:{hoy:1,emb:1,desp:1,prod:1,late:0,nopago:0,canc:1},sheets:{0:1,1:1,2:1},start:'home',nodate:1,notif:1,popup:1,defPer:{k:'week'}};
 function cfgLoad(){
   let c={}; try{ c=JSON.parse(ls.get('cfg')||'{}') }catch(e){}
   if(c.v!==3){ c.order=null; c.v=3 }
   const d=JSON.parse(JSON.stringify(CFG_DEF));
   const o=Array.isArray(c.order)?c.order.filter(k=>d.order.includes(k)):[];
   d.order.forEach(k=>{ if(!o.includes(k)) o.push(k) });
-  return {v:3,order:o,hide:Object.assign(d.hide,c.hide||{}),kpis:Object.assign(d.kpis,c.kpis||{}),sheets:Object.assign(d.sheets,c.sheets||{}),start:c.start||'home',nodate:c.nodate===undefined?1:c.nodate,notif:c.notif===undefined?1:c.notif,popup:c.popup===undefined?1:c.popup,defPer:c.defPer||{k:'week'}};
+  return {v:3,order:o,hide:Object.assign(d.hide,c.hide||{}),kpis:Object.assign(d.kpis,c.kpis||{}),sheets:Object.assign(d.sheets,c.sheets||{}),start:c.start||'home',nodate:c.nodate===undefined?1:c.nodate,phide:c.phide||{},notif:c.notif===undefined?1:c.notif,popup:c.popup===undefined?1:c.popup,defPer:c.defPer||{k:'week'}};
 }
 let CFG=cfgLoad(); S.hf='emb';
 S.per=CFG.defPer;
@@ -710,6 +718,7 @@ function cfgToggle(k){
   else if(type==='sheet') CFG.sheets[key]=CFG.sheets[key]?0:1;
   else if(type==='group'){ S.group=!S.group; ls.set('group',S.group?'1':'0') }
   else if(type==='start') CFG.start=key;
+  else if(type==='psec') CFG.phide[key]=!CFG.phide[key];
   else if(type==='notif'){ CFG.notif=CFG.notif?0:1; if(CFG.notif&&window.Notification&&Notification.permission==='default') askNotif() }
   else if(type==='popup') CFG.popup=CFG.popup?0:1;
   else if(type==='nodate'){ CFG.nodate=CFG.nodate?0:1; notifyBadge() }
@@ -860,6 +869,7 @@ async function applySheetFlag(si,row,fk,v){
 async function toggleSet(si,row,i,fk,forceVal){
   const n=nSets(si,row), cur=eff(si,row,i,fk), v=forceVal===undefined?!cur:forceVal;
   if(n<=1){ await applySheetFlag(si,row,fk,v); return }
+  logTouch(si,row);
   const k=skey(si,row,i); SETS[k]=SETS[k]||{}; SETS[k][fk]=v;
   const all=[...Array(n).keys()].map(j=>eff(si,row,j,fk));
   const allT=all.every(x=>x), allF=all.every(x=>!x);
@@ -899,7 +909,7 @@ function renderHome(){
     install:()=>{const b=installBtn(); return b?`<div style="margin:0 0 10px">${b}</div>`:''},
     kpis:()=>{
       const hoyN=homeList('hoy').reduce((a,l)=>a+l.items.length,0);
-      const K=[['hoy',hoyN,''],['emb',sum.emb.length,'main'],['desp',sum.desp,''],['prod',sum.prod,''],['late',sum.late,''],['nopago',sum.sinPago,''],['canc',sum.canc,'red']].filter(k=>CFG.kpis[k[0]]);
+      const K=[['hoy',hoyN,''],['emb',sum.emb.length,''],['desp',sum.desp,''],['prod',sum.prod,''],['late',sum.late,''],['nopago',sum.sinPago,''],['canc',sum.canc,'red']].filter(k=>CFG.kpis[k[0]]);
       return K.length?`<div class="kpis">${K.map(([k,n,c])=>`<button class="kpi ${c} ${S.hf===k?'act':''}" data-hf="${k}"><span>${KPILBL[k]}</span><b>${n}</b></button>`).join('')}</div>`:'';
     },
     alerts:()=>{
@@ -908,7 +918,6 @@ function renderHome(){
       if(sum.sinPago) h+=`<button class="alert" style="margin-top:12px;display:block;width:100%;text-align:left" data-hf="nopago">Hay ${sum.sinPago} pedido(s) sin pago confirmado. <b>Ver</b></button>`;
       return h;
     },
-    share:()=>`<div style="margin:12px 2px 0"><button class="chip" data-act="share">⇪ Compartir lista de embalado</button></div>`,
     sheets:()=>{
       const fk=S.hf||'emb', L=homeList(fk).filter(l=>CFG.sheets[l.si]); if(!L.length) return '';
       return `<div class="sec">${HTITLE[fk]} por planilla</div>`+L.map(l=>{
@@ -924,10 +933,39 @@ function renderHome(){
       const keys=Object.keys(g).sort((a,b)=>g[b].length-g[a].length); if(!keys.length) return '';
       return `<div class="sec">Total ${HTITLE[fk].toLowerCase()} por tamaño y formato</div>`+keys.map(k=>`<div class="ch"><div class="th"><span>${esc(k)}</span><i>${g[k].length}</i></div><div class="olist">${g[k].map(x=>`<button class="orow1" data-sw="${x.si}:${x.it.row}:${x.i}" data-o="${x.si}:${x.it.row}"><span class="nm"><b>${esc(x.it.v[x.D.cols.cliente]||'(sin nombre)')}</b><em>${esc(x.design)}</em></span><span class="src">${SHEETS[x.si].short}</span><small>${FDATE(x.it.date)}</small><i>›</i></button>`).join('')}</div></div>`).join('');
     },
-    period:()=>`${perUI()}
-      <div class="note">Para embalar = Imp, Prep Vin y Pegar tildados, sin Embalar ni cancelar.${S.loadedAt?` · Actualizado ${new Date(S.loadedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}`:''}</div>`
+    today:()=>{
+      const o=touchLoad(), todayS=new Date().toDateString(), rows=[];
+      SHEETS.forEach((_,si)=>{ const D=S.data[si]; if(!D) return; for(const it of D.items){
+        const fe=D.cols.fenvio>=0?parseFecha(it.v[D.cols.fenvio],it.raw[D.cols.fenvio]):null;
+        const t=o.k[si+':'+it.row]||0, sent=ok(it,D.cols.despachar)&&fe&&fe.toDateString()===todayS;
+        if(t||sent) rows.push({si,it,D,t,st:stage(it,D)}) } });
+      if(!rows.length) return `<div class="sec">Gestionados hoy</div><div class="ch"><div class="note">Todavía no tocaste ningún pedido hoy.</div></div>`;
+      const cls=st=>st==='enviado'?'st-sent':st==='desp'?'st-pack':st==='canc'?'st-canc':'st-pend';
+      rows.sort((a,b)=>b.t-a.t);
+      return `<div class="sec">Gestionados hoy · ${rows.length}</div><div class="legend"><span class="lg st-sent">Despachado</span><span class="lg st-pack">Embalado</span><span class="lg st-pend">Sin embalar</span></div><div class="ch"><div class="olist">${rows.map(({si,it,D,st})=>`<button class="orow1 ${cls(st)}" data-sw="${si}:${it.row}" data-o="${si}:${it.row}"><span class="tp">${esc(tipo(it,D))}</span><span class="nm"><b>${esc(it.v[D.cols.cliente]||'(sin nombre)')}</b><em>${esc(setsOf(it,D).map(x=>x.design).join(' + '))}</em></span><small>${FDATE(it.date)}</small><i>›</i></button>`).join('')}</div></div>`;
+    },
+    period:()=>`${perUI(true)}${S.loadedAt?`<div class="note" style="margin:-6px 4px 10px">Actualizado ${new Date(S.loadedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</div>`:''}`
   };
   return `<div class="hello">Hoy<b>Pedidos Jake</b></div>`+CFG.order.filter(k=>!CFG.hide[k]).map(k=>parts[k]?parts[k]():'').join('');
+}
+function renderConfigProd(){
+  const sw=(on,att)=>`<button class="sw2 ${on?'on':''}" ${att}></button>`;
+  const notif=!window.Notification?'No disponible en este navegador':Notification.permission==='granted'?'Activado ✓':Notification.permission==='denied'?'Bloqueado en el teléfono':'Sin permiso todavía';
+  const PS={sum:'Resumen de unidades',low:'Productos para reponer (punto de pedido)',cats:'Stock por categoría'};
+  return `<div class="hello">Ajustes<b>Jake Producción</b></div>
+  <input id="cs" class="csearch" type="search" placeholder="🔍 Buscar un ajuste…" autocomplete="off">
+  <div class="sec">Pantalla de inicio</div>
+  <div class="setcard">${Object.keys(PS).map(k=>`<div class="cfgrow"><span>${PS[k]}</span>${sw(!CFG.phide[k],`data-cfg="psec:${k}"`)}</div>`).join('')}</div>
+  <div class="sec">Avisos de punto de pedido</div>
+  <div class="setcard"><div class="cfgrow"><span>Notificación del teléfono (una vez por día)<br><small style="color:var(--mut)">Permiso: ${notif}. Cada producto elige si avisa o no desde su ficha.</small></span>${sw(CFG.notif,'data-cfg="notif:1"')}</div></div>
+  <div class="sec">Catálogo</div>
+  <div class="setcard"><div class="cfgrow"><span>Actualizar la lista de productos desde el Catálogo de Productos<br><small style="color:var(--mut)">Conserva el stock cargado</small></span><button class="chip on" data-act="syncCat">↻ Sincronizar</button></div></div>
+  <div class="sec">Cuenta y datos</div>
+  <div class="setcard">
+    <div class="cfgrow"><span>Guía paso a paso de esta pantalla</span><button class="chip on" data-act="tour">▶ Ver guía</button></div>
+    <div class="cfgrow"><span>Actualizar los datos ahora</span><button class="chip" data-act="reload">⟳ Actualizar</button></div>
+    <div class="cfgrow"><span>Cerrar sesión en este dispositivo</span><button class="chip" data-act="logout">Salir</button></div>
+  </div>`;
 }
 function renderConfig(){
   const sw=(on,att)=>`<button class="sw2 ${on?'on':''}" ${att}></button>`;
@@ -998,7 +1036,7 @@ function renderSheets(){
   const acts=`<div class="chips acts">
       <button class="chip ${S.selMode?'on':''}" data-act="select">☑ Seleccionar</button>
       ${canGroup?`<button class="chip ${S.group?'on':''}" data-act="group">Agrupar por tamaño</button>`:''}
-      ${S.filter==='emb'?`<button class="chip" data-act="share">⇪ Compartir lista</button>`:''}</div>`;
+</div>`;
   const TABS=[[ALL,'Todas'],...SHEETS.map((s,i)=>[i,s.label])];
   const bulk=S.selMode?`<div id="bulk"><span>${S.sel.size} seleccionados</span><button class="sec" data-act="selall">Todos</button><button data-bulk="embalar">Embalado</button><button data-bulk="despachar">Despachado</button><button class="sec" data-act="select">✕</button></div>`:'';
   return `<div class="tabs">${TABS.map(([k,l])=>`<button class="tab ${S.tab===k?'on':''}" data-tab="${k}">${l}</button>`).join('')}</div>
@@ -1019,7 +1057,7 @@ function render(opt={}){
       <button class="ibtn wand" data-act="tour" title="Guía paso a paso" aria-label="Guía paso a paso" style="margin-left:auto">🪄</button>
       </div>
     </header>
-    ${S.view==='pstart'?`<div id="home">${renderPStart()}</div>`:S.view==='stock'?renderStock():home?`<div id="home">${renderHome()}</div>`:S.view==='config'?`<div id="home">${renderConfig()}</div>`:renderSheets()}
+    ${S.view==='pstart'?`<div id="home">${renderPStart()}</div>`:S.view==='stock'?renderStock():home?`<div id="home">${renderHome()}</div>`:S.view==='config'?`<div id="home">${S.mod==='prod'?renderConfigProd():renderConfig()}</div>`:renderSheets()}
     ${S.selMode?'':'<button id="mic" title="Hablar">🎤</button>'}
     <nav>${prod?`<button class="${S.view==='pstart'?'on':''}" data-view="pstart"><b>⌂</b>Inicio</button><button class="${S.view==='stock'?'on':''}" data-view="stock"><b>📦</b>Stock</button><button class="${S.view==='config'?'on':''}" data-view="config"><b>⚙</b>Ajustes</button>`:`<button class="${home?'on':''}" data-view="home"><b>⌂</b>Inicio</button><button class="${S.view==='sheets'?'on':''}" data-view="sheets"><b>☰</b>Pedidos</button><button class="${S.view==='config'?'on':''}" data-view="config"><b>⚙</b>Ajustes</button>`}</nav>`;
   // restaurar desplazamientos horizontales (chips y pestañas) para que no salten al inicio
@@ -1314,10 +1352,11 @@ function installHelp(){
   document.addEventListener('touchstart',e=>{ el=e.target.closest&&e.target.closest('[data-sw]'); if(!el||e.touches.length>1){el=null;return} sx=e.touches[0].clientX; sy=e.touches[0].clientY; dx=0; mv=false },{passive:true});
   document.addEventListener('touchmove',e=>{ if(!el) return; dx=e.touches[0].clientX-sx; const dy=e.touches[0].clientY-sy;
     if(!mv&&Math.abs(dx)>12&&Math.abs(dx)>Math.abs(dy)*1.5) mv=true;
-    if(mv){ el.style.transition='none'; el.style.transform='translateX('+Math.max(-90,Math.min(90,dx*.5))+'px)'; el.style.background=dx>0?'#DDF1E5':'#FDE0DB'; el.style.position=el.style.position||'relative';
-      let h=el.querySelector(':scope>.swh'); if(!h){ h=document.createElement('span'); h.className='swh'; el.appendChild(h) }
-      h.textContent=dx>0?'✅ Marcar':'↩️ Desmarcar'; h.style.cssText=(dx>0?'left:12px;':'right:12px;')+'opacity:'+Math.min(1,Math.abs(dx)/70) } },{passive:true});
-  document.addEventListener('touchend',()=>{ if(!el) return; const e2=el; el=null; e2.style.transition='transform .2s,background .2s'; e2.style.transform=''; e2.style.background=''; const hh=e2.querySelector(':scope>.swh'); if(hh) hh.remove();
+    if(mv){ el.style.transition='none'; el.style.transform='translateX('+Math.max(-96,Math.min(96,dx*.6))+'px)';
+      if(!el._bg){ const cs=getComputedStyle(el); el._bg=el.style.background; el.style.background=(cs.backgroundColor==='rgba(0, 0, 0, 0)'||cs.backgroundColor==='transparent')?'#fff':cs.backgroundColor; el.style.position='relative'; el.style.zIndex='2';
+        const par=el.offsetParent||el.parentNode, h=document.createElement('div'); h.className='swh2'; h.style.cssText='position:absolute;z-index:1;left:'+el.offsetLeft+'px;top:'+el.offsetTop+'px;width:'+el.offsetWidth+'px;height:'+el.offsetHeight+'px;border-radius:'+cs.borderRadius; par.appendChild(h); el._h=h }
+      el._h.className='swh2 '+(dx>0?'mk':'um'); el._h.textContent=dx>0?'✅ Marcar':'↩️ Desmarcar'; el._h.style.justifyContent=dx>0?'flex-start':'flex-end'; el._h.style.opacity=Math.min(1,Math.abs(dx)/60) } },{passive:true});
+  document.addEventListener('touchend',()=>{ if(!el) return; const e2=el; el=null; e2.style.transition='transform .2s'; e2.style.transform=''; if(e2._h){ e2._h.remove(); e2._h=null } if(e2._bg!==undefined){ e2.style.background=e2._bg; e2._bg=undefined; e2.style.zIndex='' }
     if(mv&&Math.abs(dx)>70&&e2.dataset.sw.startsWith('stk:')){ S.swAt=Date.now(); stockSwipe(+e2.dataset.sw.split(':')[1],dx>0?'add':'sub') } else if(mv&&Math.abs(dx)>70){ S.swAt=Date.now(); const [si,r,i]=e2.dataset.sw.split(':'); openSwipe(+si,+r,i===undefined?null:+i,dx>0?'mark':'unmark') } });
 })();
 document.addEventListener('click',async e=>{
@@ -1410,7 +1449,7 @@ document.addEventListener('keydown',e=>{ if(e.target.id==='vtxt'&&e.key==='Enter
 document.addEventListener('visibilitychange',async()=>{
   if(document.hidden) return;
   if(token){ keepAlive(); if(S.loadedAt&&Date.now()-S.loadedAt>5*60000) loadAll(); }
-  else if(ls.get('signed')==='1'&&window.google&&google.accounts){ try{await getToken(false,true);loadAll()}catch(e){} }
+  else if(ls.get('signed')==='1'&&window.google&&google.accounts){ try{await getToken(false,true);loadMod()}catch(e){} }
 });
 
 document.addEventListener('change',e=>{
@@ -1419,7 +1458,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v24';
+const APP_V='v25';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -1437,13 +1476,13 @@ window.addEventListener('load',()=>{ checkUpdate();
   S.view=CFG.start||'home';
   if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
   render({top:true});
-  if(token) loadAll();
+  if(token) loadMod();
   if(!ls.get('toured')) setTimeout(()=>{ if(token&&S.data[0]) tourStart() },4000);
   if(clientId()&&ls.get('signed')==='1'){
     let n=0;const iv=setInterval(async()=>{
       if(window.google&&google.accounts){
         clearInterval(iv);
-        if(!token){ try{await getToken(false,true);loadAll()}catch(e){render()} }
+        if(!token){ try{await getToken(false,true);loadMod()}catch(e){render()} }
         else keepAlive();
       } else if(++n>50) clearInterval(iv);
     },200);

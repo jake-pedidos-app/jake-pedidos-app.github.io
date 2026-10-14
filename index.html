@@ -807,6 +807,7 @@ function cfgToggle(k){
   else if(type==='psec') CFG.phide[key]=!CFG.phide[key];
   else if(type==='notif'){ CFG.notif=CFG.notif?0:1; if(CFG.notif&&window.Notification&&Notification.permission==='default') askNotif() }
   else if(type==='popup') CFG.popup=CFG.popup?0:1;
+  else if(type==='bellbadge') CFG.bellBadge=CFG.bellBadge?0:1;
   else if(type==='nodate'){ CFG.nodate=CFG.nodate?0:1; notifyBadge() }
   cfgSave(); render({keep:true});
 }
@@ -937,6 +938,7 @@ function homeList(fk){
         okk=fk==='emb'?st==='emb':fk==='desp'?st==='desp':fk==='prod'?st==='prod':fk==='canc'?st==='canc':fk==='late'?isLate(it,st):fk==='nopago'?isNoPago(it,D,st):false }
       if(okk) items.push(it);
     }
+    items.sort((a,b)=>(a.date?+a.date:9e15)-(b.date?+b.date:9e15)||a.row-b.row);
     const tipos={}; items.forEach(it=>tipos1(it,D).forEach(k=>tipos[k]=(tipos[k]||0)+1));
     return {si,items,tipos};
   });
@@ -1009,7 +1011,7 @@ function renderHome(){
       return `<div class="sec">${HTITLE[fk]} por planilla</div>`+L.map(l=>{
         const D=S.data[l.si];
         return `<div class="ch"><div class="r"><b>${SHEETS[l.si].label}</b><span class="n">${l.items.length}</span></div>`+
-          (l.items.length?`<div class="olist">${[...l.items].sort((a,b)=>{const ta=tipo(a,D),tb=tipo(b,D);return ta<tb?-1:ta>tb?1:((a.date?+a.date:0)-(b.date?+b.date:0))}).map(it=>`<button class="orow1" ${RA(l.si,it.row)}><span class="tp">${esc(tipo(it,D))}</span><span class="nm"><b>${esc(it.v[D.cols.cliente]||'(sin nombre)')}</b><em>${ONO(it,D)}${esc(setsOf(it,D).map(x=>x.design).join(' + '))}</em></span><small>${FDATE(it.date)}</small><i>›</i></button>`).join('')}</div>`:'<div class="note">Nada en esta lista</div>')+
+          (l.items.length?`<div class="olist">${[...l.items].map(it=>`<button class="orow1" ${RA(l.si,it.row)}><span class="tp">${esc(tipo(it,D))}</span><span class="nm"><b>${esc(it.v[D.cols.cliente]||'(sin nombre)')}</b><em>${ONO(it,D)}${esc(setsOf(it,D).map(x=>x.design).join(' + '))}</em></span><small>${FDATE(it.date)}</small><i>›</i></button>`).join('')}</div>`:'<div class="note">Nada en esta lista</div>')+
           `</div>`;
       }).join('');
     },
@@ -1049,6 +1051,8 @@ function renderConfigProd(){
   <div class="setcard"><div class="cfgrow"><span>Notificación del teléfono (una vez por día)<br><small style="color:var(--mut)">Permiso: ${notif}. Cada producto elige si avisa o no desde su ficha.</small></span>${sw(CFG.notif,'data-cfg="notif:1"')}</div></div>
   <div class="sec">Catálogo</div>
   <div class="setcard"><div class="cfgrow"><span>Actualizar la lista de productos desde el Catálogo de Productos<br><small style="color:var(--mut)">Conserva el stock cargado</small></span><button class="chip on" data-act="syncCat">↻ Sincronizar</button></div></div>
+  <div class="sec">Campanita</div>
+  <div class="setcard"><div class="cfgrow"><span>Numerito rojo en la campanita</span>${sw(CFG.bellBadge,'data-cfg="bellbadge:1"')}</div></div>
   <div class="sec">Mi mail (para recibir avisos de punto de pedido)</div>
   <div class="setcard"><div class="cfgrow" style="display:block"><input type="email" id="myemail" class="csearch" style="margin:0" value="${esc(ls.get('myemail')||'')}" placeholder="tu mail de Google"></div></div>
   <div class="sec">Cuenta y datos</div>
@@ -1088,6 +1092,8 @@ function renderConfig(){
   <div class="sec">Acceso de otras personas</div>
   <div class="setcard"><div class="cfgrow" style="display:block;line-height:1.5"><span style="font-weight:400">Cualquier persona con una cuenta de Google que tenga acceso a la planilla “Planillas de PEDIDOS” puede usar la app con su mail. Si no tiene acceso a la planilla, no puede ver ni editar nada. Para sumar a alguien: compartile la planilla desde Google Sheets y pasale el link de la app.</span>
     <div class="chips" style="margin-top:10px"><button class="chip on" data-act="opensheet">Abrir planilla para compartir</button><button class="chip" data-act="shareapp">⇪ Compartir link de la app</button></div></div></div>
+  <div class="sec">Campanita</div>
+  <div class="setcard"><div class="cfgrow"><span>Numerito rojo en la campanita</span>${sw(CFG.bellBadge,'data-cfg="bellbadge:1"')}</div></div>
   <div class="sec">Mi mail (para recibir avisos de punto de pedido)</div>
   <div class="setcard"><div class="cfgrow" style="display:block"><input type="email" id="myemail" class="csearch" style="margin:0" value="${esc(ls.get('myemail')||'')}" placeholder="tu mail de Google"></div></div>
   <div class="sec">Cuenta y datos</div>
@@ -1111,7 +1117,7 @@ function renderSheets(){
     all.forEach(x=>{x.tp=tipo(x.it,x.D)});
     all.sort((a,b)=>{
       if(grouped){ const c=a.tp.localeCompare(b.tp); if(c) return c; const d=norm(a.D.cols.diseno>=0?a.it.v[a.D.cols.diseno]:'').localeCompare(norm(b.D.cols.diseno>=0?b.it.v[b.D.cols.diseno]:'')); if(d) return d; }
-      const da=a.it.date?a.it.date.getTime():0, db=b.it.date?b.it.date.getTime():0; return asc?(da-db||a.it.row-b.it.row):(db-da||b.it.row-a.it.row)});
+      const da=a.it.date?a.it.date.getTime():9e15, db=b.it.date?b.it.date.getTime():9e15; return (a.si-b.si)||(da-db)||(a.it.row-b.it.row)});
     S.visible=all.map(x=>x.si+':'+x.it.row);
     const total=all.length, items=all.slice(0,S.limit);
     if(grouped){
@@ -1137,12 +1143,18 @@ function renderSheets(){
     <div class="bar"><input id="q" type="search" placeholder="Buscar cliente, diseño, notas…" value="${esc(S.q)}" autocomplete="off">
     <div class="chips" id="fchips">${chips}</div>${acts}</div><div id="list">${body}</div>`;
 }
-function bellN(){ if(S.mod!=='central'||!S.data[0]) return 0; const s=summarize(); return (s.late?1:0)+(s.sinPago?1:0) }
+function bellSig(){ if(S.mod==='prod') return 'p'+(S.stock.items||[]).filter(stkLow).map(x=>x.code).join(','); if(!S.data[0]) return ''; const s=summarize(); return 'c'+s.late+'/'+s.sinPago }
+function bellN(){ if(!CFG.bellBadge||ls.get('bellread')===bellSig()) return 0; if(S.mod==='prod') return (S.stock.items||[]).filter(stkLow).length; if(!S.data[0]) return 0; const s=summarize(); return (s.late?1:0)+(s.sinPago?1:0) }
 function bulkBar(){
   const fl=FLAGS.filter(f=>S.data[0]&&S.data[0].cols[f.key]>=0);
   return `<div id="bulk"><div class="bt"><span>${S.sel.size} seleccionados</span><button class="sec" data-act="selall">Todos</button><button class="sec" data-act="select">✕</button></div><div class="bb">${fl.map(f=>`<button data-bulk="${f.key}">${f.label}</button>`).join('')}<button class="ig" data-bulkign="1">🚫 Ignorar</button></div></div>`;
 }
 function openBell(){
+  if(S.mod==='prod'){
+    const low=(S.stock.items||[]).filter(stkLow);
+    $('#sp').innerHTML=`<div class="pophd">🔔 Alertas</div>`+(low.length?`<div class="popsec">Para reponer · ${low.length}</div><div class="olist">${low.map(x=>`<button class="orow1" data-sk="${x.row}"><span class="nm"><b>${esc(x.prod)}</b><em>${esc(x.code)} · punto de pedido ${x.pp}</em></span><span class="tp">${x.stock}</span><i>›</i></button>`).join('')}</div>`:'<div class="note" style="text-align:center;padding:14px">No hay alertas.</div>')+'<div class="row"><button class="sec2" id="cx">Cerrar</button><button class="sec2" data-act="bellread">Marcar como leídas</button></div>';
+    $('#sheet').classList.add('on'); $('#sheet').dataset.mode='pop'; return;
+  }
   const s=summarize(), ig=SHEETS.reduce((a,_,i)=>a+((S.data[i]&&S.data[i].ignored||[]).length),0);
   const row=(k,t)=>`<button class="orow1" data-hf="${k}" style="width:100%"><span class="nm"><b>${t}</b></span><i>›</i></button>`;
   $('#sp').innerHTML=`<div class="pophd">🔔 Alertas</div>`+
@@ -1150,7 +1162,7 @@ function openBell(){
    (s.sinPago?row('nopago',`💳 ${s.sinPago} pedido(s) sin pago confirmado`):'')+
    (!s.late&&!s.sinPago?'<div class="note" style="text-align:center;padding:14px">No hay alertas.</div>':'')+
    (ig?`<div class="note" style="margin-top:8px">🚫 ${ig} pedido(s) ignorados (se restauran desde Ajustes).</div>`:'')+
-   '<div class="row"><button class="sec2" id="cx">Cerrar</button></div>';
+   '<div class="row"><button class="sec2" id="cx">Cerrar</button><button class="sec2" data-act="bellread">Marcar como leídas</button></div>';
   $('#sheet').classList.add('on'); $('#sheet').dataset.mode='pop';
 }
 function openHoy(which){
@@ -1506,6 +1518,7 @@ document.addEventListener('click',async e=>{
   if(S.lpAt&&Date.now()-S.lpAt<900){ S.lpAt=0; e.preventDefault(); return }
   const lg=t.closest('[data-lg]'); if(lg){ toast(lg.dataset.lg); return }
   if(t.closest('#bell')){ openBell(); return }
+  if(t.closest('#sheet [data-sk]')) $('#sheet').classList.remove('on');
   const hy=t.closest('[data-hoy]'); if(hy){ openHoy(hy.dataset.hoy); return }
   const bi=t.closest('[data-bulkign]'); if(bi){ const ks=[...S.sel]; const done=ignorar(ks); S.sel.clear(); S.selMode=false; render({keep:true}); notifyBadge(); if(done.length) toastAct(`🚫 ${done.length} pedido(s) ignorados`,'Deshacer',()=>{ designorar(done); render({keep:true}); notifyBadge() }); return }
   const i1=t.closest('[data-ign1]'); if(i1){ const k=i1.dataset.ign1; const done=ignorar([k]); $('#sheet').classList.remove('on'); render({keep:true}); notifyBadge(); if(done.length) toastAct('🚫 Pedido ignorado','Deshacer',()=>{ designorar(done); render({keep:true}); notifyBadge() }); return }
@@ -1569,6 +1582,7 @@ document.addEventListener('click',async e=>{
     if(ac.dataset.act==='shareapp') shareApp();
     if(ac.dataset.act==='installhelp') installHelp();
     if(ac.dataset.act==='group'){S.group=!S.group;ls.set('group',S.group?'1':'0');render({keep:true})}
+    if(ac.dataset.act==='bellread'){ ls.set('bellread',bellSig()); $('#sheet').classList.remove('on'); render({keep:true}); toast('Marcadas como leídas'); return }
     if(ac.dataset.act==='perToggle'){ ls.set('percol',ls.get('percol')==='0'?'1':'0'); render({keep:true}); return }
     if(ac.dataset.act==='select'){S.selMode=!S.selMode;S.sel.clear();render({keep:true})}
     if(ac.dataset.act==='selall'){S.visible.forEach(k=>S.sel.add(k));render({keep:true})}
@@ -1610,7 +1624,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v34';
+const APP_V='v35';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

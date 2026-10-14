@@ -85,12 +85,19 @@ nav button.on{color:var(--az);font-weight:700}
 .login small{color:var(--mut);display:block;margin-top:14px;line-height:1.4}
 .spin{display:inline-block;width:16px;height:16px;border:2px solid #1f5379;border-top-color:transparent;border-radius:50%;animation:r .7s linear infinite;vertical-align:-3px}
 @keyframes r{to{transform:rotate(360deg)}}
+#mic{position:fixed;right:14px;bottom:76px;width:58px;height:58px;border-radius:50%;background:var(--az);color:#fff;font-size:24px;border:0;box-shadow:0 4px 12px rgba(0,0,0,.25);z-index:7}
+#voice{position:fixed;inset:0;background:rgba(0,0,0,.4);display:none;z-index:12;align-items:flex-end}
+#voice.on{display:flex}
+#voice .p{background:#fff;width:100%;border-radius:16px 16px 0 0;padding:16px 16px calc(20px + env(safe-area-inset-bottom))}
+#voice input{width:100%;padding:12px;border:1px solid #cdd7de;border-radius:10px;font-size:16px}
+#tact{margin-left:8px;background:none;border:0;color:#9fd3ff;font-weight:700;font-size:14px}
 </style>
 </head>
 <body>
 <div id="app"></div>
 <div id="sheet"><div class="p" id="sp"></div></div>
 <div id="toast"></div>
+<div id="voice"><div class="p" id="vp"></div></div>
 <script src="https://accounts.google.com/gsi/client" async defer></script>
 <script>
 window.JAKE_CLIENT_ID = '952122897469-bf2brihcgrb1t0a3qjksuilt8jiiof02.apps.googleusercontent.com';
@@ -384,6 +391,7 @@ function render(opt={}){
   const home=S.view==='home';
   $('#app').innerHTML=`<header><div class="top"><img src="icon-192.png" alt=""><h1>Jake Central</h1><button data-act="reload">⟳</button><button id="lo">Salir</button></div></header>
     ${home?`<div id="home">${renderHome()}</div>`:renderSheets()}
+    <button id="mic" title="Hablar">🎤</button>
     <nav><button class="${home?'on':''}" data-view="home"><b>📊</b>Inicio</button><button class="${!home?'on':''}" data-view="sheets"><b>📋</b>Pedidos</button></nav>`;
   const hh=document.querySelector('header').offsetHeight; document.documentElement.style.setProperty('--hh',(hh+(home?0:44))+'px');
   if(opt.keep) window.scrollTo(0,y);
@@ -423,6 +431,107 @@ async function saveEdit(){
   catch(e){toast('No se pudo guardar: '+e.message,4500);b.textContent='Guardar'}
 }
 
+/* ---------- Asistente de voz ---------- */
+const ACTIONS=[
+  {key:'imp', re:/\b(impres|imprim|impri)/, label:'Imp'},
+  {key:'prep', re:/\b(prep|vinil|preparad)/, label:'Prep Vin'},
+  {key:'pegar', re:/\b(pegad|pegar|pegu|pego)/, label:'Pegar'},
+  {key:'embalar', re:/\b(embal)/, label:'Embalar'},
+  {key:'despachar', re:/\b(despach|envi|mand)/, label:'Despachar'}
+];
+const FILLER=new Set(['ya','el','la','los','las','un','una','pedido','pedidos','de','del','al','a','y','e','o','en','esta','este','ese','esa','fue','se','lo','que','por','favor','como','marca','marcar','marcalo','tilda','tildalo','tildar','tilde','pone','poni','ponelo','ponele','sacar','saca','quita','quitar','desmarca','desmarcar','sin','no','numero','nro','fila','n','set','es','son','con','para','hoy','ayer','listo','lista','listos','hecho','hecha','hice','mercado','libre','ml','tienda','nube','tn','tiendanube','wsp','whatsapp','reclamo','reclamos','embale','embalo','embalar','embalado','embalada','despache','despachar','despachado','despachada','enviado','enviada','envie','envio','mande','pegado','pegada','pegar','pegue','pego','impreso','impresa','imprimi','imprimir','preparado','preparada','prep','vinilo','vinil']);
+function parseVoice(text){
+  const t=norm(text);
+  const keys=ACTIONS.filter(a=>a.re.test(t)).map(a=>a.key);
+  if(!keys.length) return {err:'No entendí qué marcar. Decí, por ejemplo: "embalé el pedido de María".'};
+  const val=!/\b(no|desmarc|saca|quita|destild|sacar|quitar)\b/.test(t);
+  let si=null;
+  if(/mercado|\bml\b/.test(t)) si=0; else if(/tienda|nube|\btn\b/.test(t)) si=1; else if(/wsp|whats|reclamo/.test(t)) si=2;
+  const fm=t.match(/(?:fila|numero|nro)\s*(\d{1,6})/);
+  const rowNum=fm?+fm[1]:null;
+  const words=t.replace(/[^a-z0-9\s]/g,' ').split(/\s+/).filter(w=>w.length>=2 && !FILLER.has(w) && !/^\d+$/.test(w));
+  if(!words.length && rowNum==null) return {err:'¿De qué pedido? Decí el nombre, el diseño o el número de fila.'};
+  const cands=[];
+  SHEETS.forEach((s,i)=>{
+    if(si!==null&&si!==i) return; const D=S.data[i]; if(!D) return;
+    for(const it of D.items){
+      if(isCancel(it)||!inWindow(it)) continue;
+      if(rowNum!=null && it.row!==rowNum) continue;
+      const hay=norm(it.v.join(' '));
+      const score=words.filter(w=>hay.includes(w)).length;
+      if(words.length && score<1) continue;
+      const st=stage(it,D);
+      const rel=keys.some(k=>(k==='embalar'&&st==='emb')||(k==='despachar'&&st==='desp'))?1:0;
+      cands.push({si:i,row:it.row,it,D,score,rel});
+    }
+  });
+  if(!cands.length) return {noMatch:true,q:words.join(' ')||('fila '+rowNum)};
+  cands.sort((a,b)=>b.score-a.score || b.rel-a.rel || (b.it.date?b.it.date.getTime():0)-(a.it.date?a.it.date.getTime():0));
+  const top=cands[0];
+  if(words.length && top.score<Math.ceil(words.length/2)) return {noMatch:true,q:words.join(' ')};
+  const tie=cands.filter(c=>c.score===top.score && c.rel===top.rel);
+  if(tie.length>1) return {ambig:true,cands:tie.slice(0,6)};
+  return {si:top.si,row:top.row,keys,val,it:top.it,D:top.D};
+}
+async function setField(si,row,c,nv,fechaOverride){
+  const D=S.data[si]; const item=findItem(si,row);
+  const ch={[c]:nv};
+  if(c===D.cols.despachar && D.cols.fenvio>=0){
+    if(fechaOverride!==undefined) ch[D.cols.fenvio]=fechaOverride;
+    else if(nv && !String(item.v[D.cols.fenvio]).trim()) ch[D.cols.fenvio]=D.dateMode==='serial'?hoySerial():hoyTexto();
+  }
+  const old=[...item.raw], oldv=[...item.v];
+  for(const [cc,vv] of Object.entries(ch)){
+    const n=+cc;
+    item.raw[n]=vv;
+    item.v[n]=(typeof vv==='boolean')?(vv?'TRUE':'FALSE'):(n===D.cols.fenvio&&typeof vv==='number'?hoyTexto():String(vv));
+  }
+  render({keep:true});
+  try{ await writeCells(si,item,ch); notifyBadge(); }
+  catch(e){ item.raw=old; item.v=oldv; render({keep:true}); throw e }
+}
+async function runCommand(text){
+  const r=parseVoice(text);
+  if(r.err) return renderVoice(`Escuché: “${text}”. ${r.err}`);
+  if(r.noMatch) return renderVoice(`Escuché: “${text}”. No encontré ningún pedido que coincida con “${r.q}”.`);
+  if(r.ambig) return renderVoice(`Escuché: “${text}”. Hay varios pedidos que coinciden, decí el número de fila: `+r.cands.map(c=>`${SHEETS[c.si].short} fila ${c.row}: ${c.it.v[c.D.cols.cliente]} · ${c.it.v[c.D.cols.diseno]} · ${c.it.v[c.D.cols.variante]}`).join(' | '));
+  const {si,row,keys,val}=r; const D=S.data[si]; const it=findItem(si,row);
+  const missing=keys.filter(k=>D.cols[k]<0);
+  if(missing.length) return renderVoice(`Esa planilla no tiene la columna ${missing.map(k=>ACTIONS.find(a=>a.key===k).label).join(', ')}.`);
+  try{ for(const k of keys){ await setField(si,row,D.cols[k],val) } }
+  catch(e){ return renderVoice('No se pudo guardar: '+e.message) }
+  const labels=keys.map(k=>ACTIONS.find(a=>a.key===k).label).join(', ');
+  const msg=`${val?'✓':'Quité'} ${labels} · ${it.v[D.cols.cliente]} (${SHEETS[si].short} fila ${row})`;
+  $('#voice').classList.remove('on');
+  toastAct(msg,'Deshacer',async()=>{
+    try{ for(const k of keys){ await setField(si,row,D.cols[k],!val,(k==='despachar'&&val)?'':undefined) } toast('Deshecho') }
+    catch(e){ toast('No se pudo deshacer: '+e.message,4000) }
+  });
+}
+function toastAct(msg,label,fn){
+  const t=$('#toast'); t.innerHTML=`${esc(msg)}<button id="tact">${esc(label)}</button>`;
+  t.style.display='block'; clearTimeout(toast.t); toast.t=setTimeout(()=>t.style.display='none',6000);
+  window.__undo=fn;
+}
+function openVoice(){ renderVoice('Tocá 🎤 y decime, o escribí el comando.') }
+function renderVoice(msg){
+  $('#vp').innerHTML=`<h3 style="margin:0 0 6px">Asistente de voz</h3><div class="note" style="font-size:14px;color:#1b2a35">${esc(msg)}</div>
+    <div class="row" style="margin-top:12px"><button class="pri" id="vhab">🎤 Hablar</button><button class="sec2" id="vcl">Cerrar</button></div>
+    <div class="f"><input id="vtxt" type="text" placeholder="ej: ya embalé el de María"></div>
+    <div class="note">Ejemplos: "embalé el pedido de María", "despachado Juan Pérez", "pegado y embalado Lucía fila 120", "sacá el embalado de Lucía".</div>`;
+  $('#voice').classList.add('on');
+}
+function startListen(){
+  const SR=window.SpeechRecognition||window.webkitSpeechRecognition;
+  if(!SR){ renderVoice('Este navegador no tiene voz. Escribí el comando abajo.'); return }
+  const rec=new SR(); rec.lang='es-AR'; rec.interimResults=false; rec.maxAlternatives=1;
+  renderVoice('Escuchando… hablá ahora.');
+  rec.onresult=e=>{ runCommand(e.results[0][0].transcript) };
+  rec.onerror=e=>renderVoice('No te escuché bien ('+e.error+'). Probá de nuevo o escribí el comando.');
+  rec.onnomatch=()=>renderVoice('No entendí. Probá de nuevo.');
+  try{ rec.start() }catch(e){ renderVoice('No pude iniciar el micrófono: '+e.message) }
+}
+
 /* ---------- Eventos ---------- */
 document.addEventListener('click',async e=>{
   const t=e.target;
@@ -434,6 +543,10 @@ document.addEventListener('click',async e=>{
   const dy=t.closest('[data-days]'); if(dy){S.days=+dy.dataset.days;ls.set('days',S.days);render({keep:true});notifyBadge();return}
   const tg=t.closest('[data-t]'); if(tg){const [si,r,c]=tg.dataset.t.split(':').map(Number);toggle(si,r,c);return}
   const ed=t.closest('[data-e]'); if(ed){const [si,r]=ed.dataset.e.split(':').map(Number);openEdit(si,r);return}
+  if(t.id==='mic'){openVoice();return}
+  if(t.id==='vhab'){startListen();return}
+  if(t.id==='vcl'||t.id==='voice'){$('#voice').classList.remove('on');return}
+  if(t.id==='tact'){ $('#toast').style.display='none'; const f=window.__undo; window.__undo=null; if(f) f(); return }
   const ac=t.closest('[data-act]'); if(ac){ if(ac.dataset.act==='reload') loadAll(); if(ac.dataset.act==='notif') askNotif(); return}
   if(t.id==='more'){S.limit+=60;render({keep:true});return}
   if(t.id==='lo'){token=null;tokenExp=0;ls.set('signed','');ls.set('tok','');render();return}
@@ -443,6 +556,7 @@ document.addEventListener('click',async e=>{
   if(t.id==='scid'){const v2=$('#cid').value.trim();if(v2){ls.set('cid',v2);tokenClient=null;render()}return}
 });
 document.addEventListener('input',e=>{if(e.target.id==='q'){S.q=e.target.value;S.focusQ=true;S.limit=60;clearTimeout(S.dt);S.dt=setTimeout(()=>render({keep:true}),200)}});
+document.addEventListener('keydown',e=>{ if(e.target.id==='vtxt'&&e.key==='Enter'&&e.target.value.trim()) runCommand(e.target.value) });
 document.addEventListener('visibilitychange',async()=>{
   if(document.hidden) return;
   if(token){ keepAlive(); if(S.loadedAt&&Date.now()-S.loadedAt>5*60000) loadAll(); }

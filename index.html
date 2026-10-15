@@ -224,6 +224,7 @@ button.fl{padding:7px 11px;font-size:12.5px}
 #bell{position:fixed;right:24px;bottom:150px;width:40px;height:40px;border-radius:50%;background:#fff;border:0;font-size:18px;box-shadow:0 4px 14px rgba(0,0,0,.18);z-index:7}#bell i{position:absolute;top:-3px;right:-3px;background:#c0392b;color:#fff;font-style:normal;font-size:11px;font-weight:800;min-width:17px;height:17px;border-radius:9px;line-height:17px}
 .orow1[data-ssel]{outline:2.5px solid var(--coral,#d9534f);background:#FFE3DC!important}
 #bulk{flex-direction:column;align-items:stretch;gap:8px}#bulk .bt{display:flex;gap:8px;align-items:center}#bulk .bb{display:flex;gap:6px;overflow-x:auto}#bulk .bb button{white-space:nowrap}#bulk .bb .ig{background:#8a2b20}
+.rpsug{max-height:260px;overflow:auto}
 .rpsel{font:inherit;padding:8px 10px;border-radius:10px;border:1px solid #e6ddd5;background:#fff;max-width:100%}
 .rptbl{overflow-x:auto}.rptbl table{border-collapse:collapse;width:100%;font-size:13px}.rptbl th{text-align:left;font-size:11.5px;color:var(--mut);padding:6px 8px;border-bottom:1px solid #eadfd6;white-space:nowrap}.rptbl td{padding:7px 8px;border-bottom:1px solid #f3ece6;white-space:nowrap}.rptbl .n{text-align:right;font-variant-numeric:tabular-nums}.rptbl tr.tot td{font-weight:800;border-top:2px solid #eadfd6}
 .dsum{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#fff;border-radius:16px;padding:12px 14px;margin:0 0 12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}.dsum b{font-size:15px}.dsum span{font-size:13px;font-weight:700;color:var(--coral,#d9534f)}.ono{font-size:12px;font-weight:700;color:var(--coral,#d9534f);margin-left:4px}.orow1 .nm b,.orow1 .nm em{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.orow1 .nm{min-width:0;flex:1}.lgd{width:16px;height:16px;border-radius:50%;border:0;padding:0}.lgd.st-sent{background:#BFE5CC}.lgd.st-pack{background:#E3F3E9;box-shadow:inset 0 0 0 1px #b9d9c4}.lgd.st-pend{background:#FFF0D2;box-shadow:inset 0 0 0 1px #ecd9a8}.lgd.st-warn{background:#FFD9B8}
@@ -835,13 +836,17 @@ function shareApp(){
 const TOURS={
  home:[
   {sel:'.brand',t:'Inicio',x:'Esta es la pantalla de resumen. Tocá el logo en cualquier momento para volver acá.'},
-  {sel:'.perbox',t:'Período',x:'Elegí qué pedidos cuentan: hoy, 3 días, semana, mes… o tocá “Personalizar” para poner tus propios días o un rango de fechas. El interruptor ignora los pedidos sin fecha.'},
+  {sel:'.dsum',t:'Despachados hoy',x:'Cuántos despachaste hoy. Tocá la barra o un chip (ML, TN, WSP) para ver el detalle.'},
+  {sel:'.perbox',t:'Período',x:'Tocá la fila para desplegar o plegar los períodos: hoy, 3 días, semana, mes… o personalizado.'},
+  {sel:'#bell',t:'Campanita',x:'Alertas de pedidos demorados y sin pago. Tocá una y te lleva a esa lista. Podés marcarlas como leídas.'},
   {sel:'.kpis',t:'Resumen',x:'Cada tarjeta cuenta pedidos. Tocá una y te lleva a esa lista ya filtrada.'},
   {sel:'.ch',t:'Para embalar por planilla',x:'Cada línea es un pedido: tamaño y formato + nombre del cliente. Tocá una línea para abrir el detalle y marcarlo (Embalar, Despachar…) o cambiar la fecha.'},
   {sel:'#mic',t:'Asistente de voz',x:'Tocá el micrófono y decí, por ejemplo: “embalé el pedido de María” o “cambiá la fecha de Juan a ayer”. Se puede deshacer.'},
   {sel:'nav',t:'Menú',x:'Inicio, Pedidos (listas completas con filtros) y Ajustes. En cada pantalla, la varita 🪄 de arriba te da una guía propia.'}
  ],
  sheets:[
+  {sel:'[data-act=newOrder]',t:'Nuevo pedido',x:'Cargá un pedido a mano (por ejemplo de WhatsApp) con todas las columnas, o dictalo con la voz. Todo es opcional.'},
+  {sel:'.card',t:'Mantené apretado',x:'Mantené apretado un pedido para seleccionar varios: cambiás sus estados juntos o los ignorás (solo en la app, no en la planilla).'},
   {sel:'.tabs',t:'Planillas',x:'Elegí Todas, Mercado Libre, Tienda Nube o Reclamos/WSP.'},
   {sel:'#q',t:'Buscador',x:'Buscá por cliente, diseño o notas.'},
   {sel:'#fchips',t:'Filtros',x:'Deslizá de lado: para embalar, embalados, demorados, sin pago, cancelados, sin fecha, todos. El número es la cantidad.'},
@@ -850,6 +855,19 @@ const TOURS={
   {sel:'.edit',t:'Editar',x:'Abre el pedido para cambiar cualquier columna.'},
   {sel:'[data-act=select]',t:'Seleccionar varios',x:'Marcá muchos pedidos y embalalos o despachalos de una vez.'},
   {sel:'#mic',t:'Voz',x:'Decí qué hacer con un pedido y lo hace por vos.'}
+ ],
+ reports:[
+  {sel:'[data-rpstart="0"]',t:'Reportes listos',x:'Atajos para empezar. Cambiá lo que quieras y guardá los tuyos con ★.'},
+  {sel:'.perbox',t:'Filtros combinables',x:'Período, tienda, estado, tamaño, formato, piezas… combiná lo que necesites. Contás por fecha de pedido o de envío.'},
+  {sel:'[data-rpsug=dq]',t:'Diseños y clientes',x:'Escribí una letra y aparecen los que coinciden. Tocá para sumarlos: podés elegir varios diseños o clientes. También filtrás clientes que compraron más de una vez.'},
+  {sel:'[data-rpin=g1]',t:'Agrupar',x:'Elegí cómo agrupar (tamaño, formato, mes, tienda, cliente…) y un segundo nivel opcional.'},
+  {sel:'[data-rpact=pdf]',t:'Exportar',x:'Bajá el reporte en PDF o Excel. El detalle de pedidos se incluye si lo activaste.'}
+ ],
+ neworder:[
+  {sel:'#sp [data-nwsi]',t:'Tienda',x:'Elegí en qué planilla se carga el pedido.'},
+  {sel:'#sp .f',t:'Datos',x:'Completá lo que tengas. Todo es opcional: lo que dejes vacío queda vacío.'},
+  {sel:'#sp .popsec:last-of-type',t:'Estados',x:'Podés dejar tildados los pasos que ya están hechos; los anteriores se tildan solos.'},
+  {sel:'#nwsave',t:'Guardar',x:'Lo agrega al final de la planilla. Si lo dictaste por voz, revisá antes que los datos estén bien.'}
  ],
  config:[
   {sel:'#cs',t:'Buscador de ajustes',x:'Escribí una palabra (fecha, aviso, orden…) y quedan solo los ajustes que coinciden.'},
@@ -890,7 +908,7 @@ function tourShow(i){
     <div class="tip" style="${below?'bottom:16px':'top:16px'}"><h4>${st.t}</h4>${st.x}<div class="tb"><span>${i+1} / ${TL.length}</span><span style="flex:1"></span><button class="sk" data-tour="skip">Salir</button><button data-tour="next">${i===TL.length-1?'Listo':'Siguiente'}</button></div></div>`;
   },250);
 }
-function tourStart(){ tourStop(); TL=TOURS[S.view]||TOURS.home; setTimeout(()=>tourShow(0),80) }
+function tourStart(name){ tourStop(); TL=TOURS[typeof name==='string'?name:S.view]||TOURS.home; setTimeout(()=>tourShow(0),80) }
 
 /* ---------- Render ---------- */
 function matches(it,D,st){
@@ -1231,6 +1249,7 @@ function openOrder(si,row){
 }
 function openSwipe(si,row,i,mode){
   const D=S.data[si], it=findItem(si,row); if(!it) return;
+  { const _m=i!=null&&nSets(si,row)>1; const _st=f=>_m?eff(si,row,i,f.key):orderFlagState(si,row,f.key)==='all'; const _l=FLAGS.filter(f=>D.cols[f.key]>=0).filter(f=>mode==='mark'?!_st(f):_st(f)); if(!_l.length){ toast(mode==='mark'?'✓ Ya está todo marcado':'No hay nada marcado'); return } }
   const multiSet=i!=null&&nSets(si,row)>1;
   const st=f=> multiSet?eff(si,row,i,f.key):orderFlagState(si,row,f.key)==='all';
   const all=FLAGS.filter(f=>D.cols[f.key]>=0);
@@ -1347,7 +1366,7 @@ function nwRender(banner){
     if(LONG.includes(c)) return `<div class="f"><label>${esc(hd)}</label><textarea rows="2" data-nw="${esc(hd)}">${esc(v||'')}</textarea></div>`;
     return `<div class="f"><label>${esc(hd)}</label><input type="text" data-nw="${esc(hd)}" value="${esc(v||'')}"></div>`;
   };
-  $('#sp').innerHTML=`<h3 style="margin:0 0 8px">＋ Nuevo pedido</h3>${banner?`<div class="note" style="color:var(--ink);background:#FFF0D2;border-radius:12px;padding:10px">${esc(banner)}</div>`:''}
+  $('#sp').innerHTML=`<div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px"><h3 style="margin:0">＋ Nuevo pedido</h3><button class="ibtn wand" data-tournew="1" title="Guía">🪄</button></div>${banner?`<div class="note" style="color:var(--ink);background:#FFF0D2;border-radius:12px;padding:10px">${esc(banner)}</div>`:''}
   <div class="popsec">Tienda</div><div class="chips" style="margin-bottom:6px">${SHEETS.map((x,i)=>`<button class="chip ${i===si?'on':''}" data-nwsi="${i}">${x.label}</button>`).join('')}</div>
   <div class="note">Todo es opcional: lo que dejes vacío queda vacío.</div>
   ${fields.filter(x=>!D.isBool[x.c]).map(inp).join('')}
@@ -1406,8 +1425,8 @@ function runNewOrder(no,text){
 
 
 /* ================= REPORTES ================= */
-const RP_DEF={preset:'month',from:'',to:'',basis:'pedido',shops:[],estados:[],tams:[],fmts:[],piezas:[],q:'',dq:'',g1:'tam_fmt',g2:'',detail:false};
-function rpLoad(){ let o=null; try{ o=JSON.parse(ls.get('rp')||'null') }catch(e){} return Object.assign(JSON.parse(JSON.stringify(RP_DEF)),o||{}) }
+const RP_DEF={preset:'month',from:'',to:'',basis:'pedido',shops:[],estados:[],tams:[],fmts:[],piezas:[],q:'',dq:'',dqs:[],cqs:[],minOrd:'1',g1:'tam_fmt',g2:'',detail:false};
+function rpLoad(){ let o=null; try{ o=JSON.parse(ls.get('rp')||'null') }catch(e){} const r=Object.assign(JSON.parse(JSON.stringify(RP_DEF)),o||{}); if(r.dq){ r.dqs.push(r.dq); r.dq='' } if(r.q){ r.cqs.push(r.q); r.q='' } return r }
 S.rp=rpLoad();
 function rpPersist(){ ls.set('rp',JSON.stringify(S.rp)) }
 const RP_EST={canc:'Cancelado',enviado:'Despachado',desp:'Embalado',emb:'Listo para embalar',prod:'En producción'};
@@ -1437,15 +1456,15 @@ function rpAll(){
   return out;
 }
 function rpRows(){
-  const R=S.rp, [a,b]=rpRange(), dq=norm(R.dq).trim(), q=norm(R.q).trim();
+  const R=S.rp, [a,b]=rpRange(), dqs=(R.dqs||[]).map(x=>norm(x).trim()).filter(Boolean), cqs=(R.cqs||[]).map(x=>norm(x).trim()).filter(Boolean);
   return rpAll().filter(r=>{
     if(R.shops.length&&!R.shops.includes(String(r.si))) return false;
     if(R.estados.length&&!R.estados.includes(r.estado)) return false;
     if(R.tams.length&&!R.tams.includes(r.tam)) return false;
     if(R.fmts.length&&!R.fmts.includes(r.fmt)) return false;
     if(R.piezas.length&&!R.piezas.includes(r.piezas)) return false;
-    if(dq&&!norm(r.diseno).includes(dq)) return false;
-    if(q&&!norm(r.cliente+' '+r.notas+' '+r.orden).includes(q)) return false;
+    if(dqs.length){ const n=norm(r.diseno); if(!dqs.some(t=>n.includes(t))) return false }
+    if(cqs.length){ const n=norm(r.cliente+' '+r.notas+' '+r.orden); if(!cqs.some(t=>n.includes(t))) return false }
     const d=R.basis==='envio'?r.envio:r.fecha;
     if(a!==-Infinity||b!==Infinity||R.basis==='envio'){ if(!d) return false; const t=d.getTime(); if(t<a||t>b) return false }
     return true;
@@ -1472,7 +1491,7 @@ function rpGroup(rows){
     if(!o){ o={l1:k[0][0],l2:k[1]?k[1][0]:null,s1:k[0][1],s2:k[1]?k[1][1]:'',sets:0,ord:new Set()}; M.set(id,o) }
     o.sets++; o.ord.add(r.si+':'+r.it.row);
   }
-  const arr=[...M.values()], tot1={}; arr.forEach(o=>{ tot1[o.s1]=(tot1[o.s1]||0)+o.sets });
+  const mo=+R.minOrd||1; const arr=[...M.values()].filter(o=>o.ord.size>=mo), tot1={}; arr.forEach(o=>{ tot1[o.s1]=(tot1[o.s1]||0)+o.sets });
   const cmp=(x,y)=>x<y?-1:x>y?1:0;
   arr.sort((a,b)=>{
     if(time(g1)||g1==='ninguno'){ const c=cmp(a.s1,b.s1); if(c) return c }
@@ -1500,8 +1519,9 @@ function rpDesc(){
   if(R.tams.length) parts.push('Tamaño: '+R.tams.join(', '));
   if(R.fmts.length) parts.push('Formato: '+R.fmts.join(', '));
   if(R.piezas.length) parts.push('Piezas: '+R.piezas.join(', '));
-  if(R.dq) parts.push('Diseño: '+R.dq);
-  if(R.q) parts.push('Búsqueda: '+R.q);
+  if((R.dqs||[]).length) parts.push('Diseño: '+R.dqs.join(' / '));
+  if((R.cqs||[]).length) parts.push('Cliente/nota/orden: '+R.cqs.join(' / '));
+  if(+R.minOrd>1) parts.push('Solo con '+R.minOrd+' o más pedidos');
   return parts;
 }
 function rpOpts(){
@@ -1529,8 +1549,11 @@ function renderReports(){
     <div class="popsec">Tamaño</div><div class="chips pc">${O.tams.map(v=>chip('tams',v,v)).join('')}</div>
     <div class="popsec">Formato</div><div class="chips pc">${O.fmts.map(v=>chip('fmts',v,v)).join('')}</div>
     <div class="popsec">Piezas por set</div><div class="chips pc">${O.piezas.map(v=>chip('piezas',v,v==='—'?'otro':v)).join('')}</div>
-    <div class="perx"><label>Diseño <input type="text" data-rpin="dq" value="${esc(R.dq)}" placeholder="ej: Raíces" style="width:100%"></label></div>
-    <div class="perx"><label>Cliente / nota / orden <input type="text" data-rpin="q" value="${esc(R.q)}" placeholder="buscar…" style="width:100%"></label></div>
+    <div class="popsec">Diseños</div><div class="chips pc">${(R.dqs||[]).map((v,i)=>`<button class="chip on" data-rprm="dqs:${i}">${esc(v)} ✕</button>`).join('')}</div>
+    <input type="search" class="csearch" id="rpdq" data-rpsug="dq" placeholder="Escribí para buscar diseños…" autocomplete="off" style="margin:6px 0 0"><div id="rpsug-dq" class="rpsug"></div>
+    <div class="popsec">Clientes / notas / n° de orden</div><div class="chips pc">${(R.cqs||[]).map((v,i)=>`<button class="chip on" data-rprm="cqs:${i}">${esc(v)} ✕</button>`).join('')}</div>
+    <input type="search" class="csearch" id="rpcq" data-rpsug="cq" placeholder="Escribí un nombre, nota u orden…" autocomplete="off" style="margin:6px 0 0"><div id="rpsug-cq" class="rpsug"></div>
+    <div class="perx"><label>Mostrar solo con ${sel('minOrd',String(R.minOrd||'1'),[['1','cualquier cantidad'],['2','2 o más pedidos'],['3','3 o más pedidos'],['5','5 o más pedidos']])}</label></div>
     <div class="popsec">Agrupar por</div>
     <div class="perx"><label>1° ${sel('g1',R.g1,RP_G)}</label></div>
     <div class="perx"><label>2° ${sel('g2',R.g2,[['','(ninguno)'],...RP_G.filter(x=>x[0]!=='ninguno')])}</label></div>
@@ -1628,12 +1651,23 @@ function rpAct(a){
 function rpClick(t){
   const c=t.closest('[data-rp]'); if(c){ const [k,v]=c.dataset.rp.split(/:(.*)/s); const a=S.rp[k], i=a.indexOf(v); i<0?a.push(v):a.splice(i,1); rpPersist(); render({keep:true}); return true }
   const s=t.closest('[data-rpset]'); if(s){ const [k,v]=s.dataset.rpset.split(/:(.*)/s); S.rp[k]=k==='detail'?!!v:v; rpPersist(); render({keep:true}); return true }
+  const ad=t.closest('[data-rpadd]'); if(ad){ const [k,v]=ad.dataset.rpadd.split(/:(.*)/s); if(!S.rp[k].includes(v)) S.rp[k].push(v); rpPersist(); render({keep:true}); return true }
+  const rm=t.closest('[data-rprm]'); if(rm){ const [k,i]=rm.dataset.rprm.split(':'); S.rp[k].splice(+i,1); rpPersist(); render({keep:true}); return true }
   const dl=t.closest('[data-rpdel]'); if(dl){ let L=[]; try{ L=JSON.parse(ls.get('rpsaved')||'[]') }catch(e){} L.splice(+dl.dataset.rpdel,1); ls.set('rpsaved',JSON.stringify(L)); render({keep:true}); return true }
   const ld=t.closest('[data-rpload]'); if(ld){ let L=[]; try{ L=JSON.parse(ls.get('rpsaved')||'[]') }catch(e){} const x=L[+ld.dataset.rpload]; if(x){ S.rp=Object.assign(JSON.parse(JSON.stringify(RP_DEF)),x.f); rpPersist(); render({keep:true}) } return true }
   const st=t.closest('[data-rpstart]'); if(st){ S.rp=Object.assign(JSON.parse(JSON.stringify(RP_DEF)),RP_START[+st.dataset.rpstart][1]); rpPersist(); render({keep:true}); return true }
   const ac=t.closest('[data-rpact]'); if(ac){ rpAct(ac.dataset.rpact); return true }
   return false;
 }
+document.addEventListener('input',e=>{
+  const el=e.target.closest&&e.target.closest('[data-rpsug]'); if(!el) return;
+  const kind=el.dataset.rpsug, key=kind==='dq'?'dqs':'cqs', box=document.getElementById('rpsug-'+kind), q=norm(el.value).trim();
+  if(!q){ box.innerHTML=''; return }
+  const all=rpAll(), M=new Map();
+  all.forEach(r=>{ const lab=kind==='dq'?r.diseno:r.cliente; if(!norm(lab).includes(q)) return; const o=M.get(lab)||{n:0,ord:new Set()}; o.n++; o.ord.add(r.si+':'+r.it.row); M.set(lab,o) });
+  const L=[...M.entries()].sort((a,b)=>b[1].ord.size-a[1].ord.size).slice(0,12);
+  box.innerHTML=L.map(([l,o])=>`<button class="orow1" data-rpadd="${key}:${esc(l)}" style="width:100%"><span class="nm"><b>${esc(l)}</b></span><small>${o.ord.size} ${o.ord.size===1?'pedido':'pedidos'}</small></button>`).join('')+`<button class="orow1" data-rpadd="${key}:${esc(el.value.trim())}" style="width:100%"><span class="nm"><b>Agregar “${esc(el.value.trim())}” (contiene)</b></span><i>＋</i></button>`;
+});
 document.addEventListener('change',e=>{
   const el=e.target.closest&&e.target.closest('[data-rpin]'); if(!el) return;
   S.rp[el.dataset.rpin]=el.value; if(el.dataset.rpin==='from'||el.dataset.rpin==='to') S.rp.preset='custom'; rpPersist(); render({keep:true});
@@ -1850,6 +1884,7 @@ document.addEventListener('click',async e=>{
   if(S.view==='reports'&&rpClick(t)) return;
   const lg=t.closest('[data-lg]'); if(lg){ toast(lg.dataset.lg); return }
   if(t.closest('#bell')){ openBell(); return }
+  if(t.closest('[data-tournew]')){ tourStart('neworder'); return }
   const nsi=t.closest('[data-nwsi]'); if(nsi){ nwRead(); S.nw.si=+nsi.dataset.nwsi; S.nw.keep=true; nwRender(); return }
   if(t.id==='nwsave'){ nwSave(); return }
   const bg=t.closest('[data-bellgo]'); if(bg){ $('#sheet').classList.remove('on'); S.view='sheets';S.tab=ALL;S.filter=bg.dataset.bellgo;S.q='';S.limit=60;S.focusQ=false;render({top:true});return }
@@ -1960,7 +1995,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v39';
+const APP_V='v41';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

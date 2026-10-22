@@ -348,7 +348,7 @@ function designorar(keys){
   for(const k of keys){ const [si,row]=k.split(':').map(Number); const D=S.data[si]; const it=D&&D.ignored.find(x=>x.row===row); delete o[k]; if(it){ D.ignored=D.ignored.filter(x=>x!==it); D.items.push(it); D.items.sort((a,b)=>a.row-b.row) } }
   ignSave(o);
 }
-function parseSheet(i, rows, raw){
+function parseSheet(i, rows, raw, hid){
   const h = rows.findIndex((r,ix)=>ix<12 && r.some(c=>/^embalar/i.test(String(c||'').trim())));
   if(h<0) throw new Error('No encontré los encabezados en '+SHEETS[i].name);
   const head = rows[h].map(x=>String(x||'').trim());
@@ -368,6 +368,7 @@ function parseSheet(i, rows, raw){
   if(cols.fenvio>=0){for(let r=raw.length-1;r>h;r--){const v=raw[r]?.[cols.fenvio];if(v!==undefined&&v!==''){dateMode=typeof v==='number'?'serial':'text';break}}}
   const items=[];
   for(let r=h+1;r<rows.length;r++){
+    if(hid && hid[r]) continue; // filas ocultas (a mano o por filtro) no se traen
     const row=rows[r]||[], rw=raw[r]||[];
     const key=[cols.diseno,cols.cliente,cols.variante].map(c=>c>=0?(row[c]||''):'').join('');
     if(!key.trim()) continue;
@@ -398,12 +399,16 @@ async function loadAll(silent){
   S.loading=true; if(!silent||!S.loadedAt) render({keep:true});
   try{
     const ranges = SHEETS.map(s=>'ranges='+encodeURIComponent(`'${s.name}'!A1:AA`)).join('&');
-    const [f,u] = await Promise.all([
+    const [f,u,m] = await Promise.all([
       api(`/values:batchGet?${ranges}&valueRenderOption=FORMATTED_VALUE`),
-      api(`/values:batchGet?${ranges}&valueRenderOption=UNFORMATTED_VALUE`)
+      api(`/values:batchGet?${ranges}&valueRenderOption=UNFORMATTED_VALUE`),
+      api(`?${ranges}&includeGridData=true&fields=sheets(data(rowMetadata(hiddenByUser,hiddenByFilter)))`).catch(()=>null)
     ]);
     S.err=null;
-    SHEETS.forEach((_,i)=>parseSheet(i, f.valueRanges[i].values||[], u.valueRanges[i].values||[]));
+    // filas ocultas: se leen de la metadata de la planilla y se excluyen
+    const hidOk=!!(m&&m.sheets&&m.sheets.length===SHEETS.length);
+    if(!hidOk) toast('No pude revisar las filas ocultas; se muestran todas',4000);
+    SHEETS.forEach((_,i)=>{ const meta=hidOk?((m.sheets[i].data&&m.sheets[i].data[0]&&m.sheets[i].data[0].rowMetadata)||[]):[]; const hid=meta.map(x=>!!(x&&(x.hiddenByUser||x.hiddenByFilter))); parseSheet(i, f.valueRanges[i].values||[], u.valueRanges[i].values||[], hid) });
     S.loadedAt=Date.now();
   }catch(e){S.err=e.message;toast(e.message,4500)}
   S.loading=false; render({keep:true}); notifyBadge(); notifyIfNeeded(); loadAct(); trackChanges();
@@ -2034,7 +2039,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v44';
+const APP_V='v45';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

@@ -1104,6 +1104,9 @@ function renderHome(){
         const key=si+':'+it.row, fe=D.cols.fenvio>=0?parseFecha(it.v[D.cols.fenvio],it.raw[D.cols.fenvio]):null;
         const t=o.k[key]||0, a=ACT.today[key], sent=ok(it,D.cols.despachar)&&fe&&fe.toDateString()===todayS;
         const warn=ok(it,D.cols.despachar)&&!ok(it,D.cols.embalar)&&!isCancel(it)&&it.date&&+it.date>lim;
+        // regla: un pedido despachado con fecha de envío anterior a hoy no entra en Gestionados hoy
+        const oldSent=ok(it,D.cols.despachar)&&fe&&fe.toDateString()!==todayS;
+        if(oldSent) continue;
         if(t||a||sent||warn) rows.push({si,it,D,t:t||(a?1:0),st:stage(it,D),warn,a}) } });
       if(!rows.length) return `<div class="sec">Gestionados hoy</div><div class="ch"><div class="note">Todavía no hay movimientos hoy.</div></div>`;
       const cls=r=>r.warn?'st-warn':r.st==='enviado'?'st-sent':r.st==='desp'?'st-pack':r.st==='canc'?'st-canc':'st-pend';
@@ -2039,7 +2042,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v45';
+const APP_V='v46';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

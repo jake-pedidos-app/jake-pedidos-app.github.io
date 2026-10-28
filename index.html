@@ -1597,7 +1597,9 @@ function lblItems(){
   return out;
 }
 const lblToday=p=>{ if(!p) return false; const d=new Date(p); return !isNaN(d)&&d.toDateString()===new Date().toDateString() };
-function lblPrinted(){ return lblAll().filter(x=>S.lst&&S.lst[x.n]&&lblToday(S.lst[x.n].p)) }
+const lblLP=()=>{ try{ return JSON.parse(ls.get('lprint')||'{}') }catch(e){ return {} } };
+const lblReady=n=>{ const e=S.lst&&S.lst[n]; return !e||e.st!=='pending' };
+function lblPrinted(){ const m=lblLP(); return lblAll().filter(x=>lblToday(m[x.n])) }
 async function lblStatusLoad(){
   if(S.lstBusy) return; S.lstBusy=true; S.lstAt=Date.now();
   try{
@@ -1609,6 +1611,10 @@ async function lblStatusLoad(){
     const r=await fetch(`${LBL_URL}?a=st&t=${encodeURIComponent(tk)}&o=${nums.join(',')}`); const j=await r.json();
     if(j.error) throw new Error(j.error);
     const m={}; (j.list||[]).forEach(e=>{ m[e.n]=e }); S.lst=m; S.lerr='';
+    const lp=lblLP(), now=new Date().toISOString(), cut=Date.now()-3*86400000; let ch=false;
+    for(const e of (j.list||[])){ if((e.sub==='printed'||e.p)&&!lp[e.n]){ lp[e.n]=e.p||now; ch=true } }
+    for(const k in lp){ if(new Date(lp[k]).getTime()<cut){ delete lp[k]; ch=true } }
+    if(ch) ls.set('lprint',JSON.stringify(lp));
   }catch(e){ S.lerr='No se pudo ver el estado de impresión: '+e.message }
   finally{ S.lstBusy=false; if(S.view==='labels') render({keep:true}) }
 }
@@ -1617,9 +1623,9 @@ function renderLabels(){
   if(lblCol(S.data[0])<0) return `<div class="msg">No encontré la columna “Pedido ID ML” en la hoja de Mercado Libre.</div>`;
   if(!S.lstAt||Date.now()-S.lstAt>120000) setTimeout(lblStatusLoad,0);
   const L=lblItems(), P=lblPrinted(); const have=new Set(L.concat(P).map(x=>x.n)); for(const n of [...S.lsel]) if(!have.has(n)) S.lsel.delete(n);
-  const isP=n=>S.lst&&S.lst[n]&&(lblToday(S.lst[n].p)||S.lst[n].sub==='printed');
-  const row=x=>{ const on=S.lsel.has(x.n), D=x.D;
-    return `<button class="orow1" data-lbl="${esc(x.n)}" style="width:100%"><span class="nm"><b>${isP(x.n)?'🖨 ':''}${esc(String(x.it.v[D.cols.cliente]||'(sin nombre)'))}</b><small style="display:block;opacity:.7">${esc(String(x.it.v[D.cols.diseno]||''))}</small></span><i>${on?'☑':'☐'}</i></button>` };
+  const lp=lblLP(), isP=n=>lblToday(lp[n])||(S.lst&&S.lst[n]&&S.lst[n].sub==='printed');
+  const row=x=>{ const on=S.lsel.has(x.n), D=x.D, rd=lblReady(x.n);
+    return `<button class="orow1" data-lbl="${esc(x.n)}" style="width:100%"><span class="nm"><b>${!rd?'⏳ ':isP(x.n)?'🖨 ':''}${esc(String(x.it.v[D.cols.cliente]||'(sin nombre)'))}</b><small style="display:block;opacity:.7">${rd?'':'Etiqueta aún no disponible · '}${esc(String(x.it.v[D.cols.diseno]||''))}</small></span><i>${on?'☑':'☐'}</i></button>` };
   let last='', rows='';
   for(const x of L){
     if(x.st!==last){ last=x.st; rows+=`<div class="grp">${x.st==='emb'?'Para embalar':'Embalados, sin despachar'}</div>` }
@@ -1637,7 +1643,8 @@ async function lblExport(){
   if(S.lbusy||!S.lsel.size) return;
   S.lbusy=true; render({keep:true});
   try{
-    const tk=await getToken(false), nums=[...S.lsel]; let fails=[], k=0;
+    const tk=await getToken(false), nums=[...S.lsel].filter(lblReady), skip=S.lsel.size-nums.length; let fails=[], k=0;
+    if(!nums.length){ toast('Esos pedidos todavía no tienen etiqueta (en fabricación)',5000); S.lbusy=false; render({keep:true}); return }
     for(let i=0;i<nums.length;i+=50){
       const part=nums.slice(i,i+50);
       const r=await fetch(`${LBL_URL}?t=${encodeURIComponent(tk)}&o=${part.join(',')}`); const j=await r.json();
@@ -1647,13 +1654,13 @@ async function lblExport(){
       const dt=new Date(); k++;
       await rpDeliver(new Blob([u],{type:'application/pdf'}),`etiquetas-ml-${dt.getFullYear()}${pad(dt.getMonth()+1)}${pad(dt.getDate())}${nums.length>50?'-'+k:''}.pdf`);
     }
-    toast(fails.length?`Listo. Sin etiqueta: ${fails.length} (${fails.slice(0,3).join(', ')})`:'Etiquetas listas',fails.length?6000:2200);
+    toast(fails.length||skip?`Listo. Sin etiqueta: ${fails.length+skip}`:'Etiquetas listas',fails.length||skip?6000:2200);
   }catch(e){ toast('No se pudo: '+e.message,6000) }
   S.lbusy=false; render({keep:true}); S.lstAt=0; setTimeout(lblStatusLoad,2500);
 }
 function lblClick(t){
   const a=t.closest('[data-lbl]'); if(a){ const n=a.dataset.lbl; S.lsel.has(n)?S.lsel.delete(n):S.lsel.add(n); render({keep:true}); return true }
-  const b=t.closest('[data-lblall]'); if(b){ const m=b.dataset.lblall; S.lsel.clear(); if(m!=='none') lblItems().forEach(x=>{ if(m==='all'||x.st==='emb') S.lsel.add(x.n) }); render({keep:true}); return true }
+  const b=t.closest('[data-lblall]'); if(b){ const m=b.dataset.lblall; S.lsel.clear(); if(m!=='none') lblItems().forEach(x=>{ if((m==='all'||x.st==='emb')&&lblReady(x.n)) S.lsel.add(x.n) }); render({keep:true}); return true }
   if(t.closest('[data-lblref]')){ S.lstAt=0; lblStatusLoad(); return true }
   if(t.closest('[data-lblgo]')){ lblExport(); return true }
   return false;
@@ -2124,7 +2131,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v48';
+const APP_V='v49';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());
@@ -2139,7 +2146,7 @@ async function checkUpdate(){
 }
 window.addEventListener('load',()=>{ checkUpdate();
   if(!ls.get('email')) ls.set('email','fakundo713@gmail.com');
-  S.view=CFG.start||'home';
+  S.view=['labels','reports'].includes(ls.get('view'))?ls.get('view'):(CFG.start||'home');
   if('serviceWorker' in navigator) navigator.serviceWorker.register('sw.js').catch(()=>{});
   render({top:true});
   if(token) loadMod();

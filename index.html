@@ -186,6 +186,16 @@ button.alert{font-size:14px;color:var(--ink);font-family:inherit}
 .orow1 small{flex:none;font-size:11px;color:#b5aaa3}
 .ch .r{padding-right:62px}
 #mic{width:52px;height:52px;font-size:21px;opacity:.92}#bell{right:22px;bottom:148px}
+.lrow{display:flex;align-items:center;gap:12px;width:100%;text-align:left;background:#fff;border:2px solid transparent;border-radius:18px;padding:12px 14px;margin:0 0 8px;box-shadow:0 1px 6px rgba(58,52,49,.08);font:inherit;color:var(--ink)}
+.lrow.on{border-color:var(--coral);background:var(--peach-l)}
+.lrow .lck{flex:0 0 30px;height:30px;border-radius:50%;border:2px solid #D9CCC2;display:flex;align-items:center;justify-content:center;color:#fff;font-size:18px;font-weight:800}
+.lrow.on .lck{background:var(--coral);border-color:var(--coral)}
+.lrow .lnm{flex:1;min-width:0}.lrow .lnm b{display:block;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lrow .lnm small{display:block;color:var(--mut);font-size:13px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.lrow.done{background:#F2F8F4}.lrow.done .lck{border-color:var(--ok)}
+.ltag{flex:0 0 auto;font-size:11px;font-weight:800;padding:3px 8px;border-radius:999px;background:#E3F3EA;color:var(--ok)}.ltag.w{background:#FFF0D2;color:#B7791F}
+.lbar{position:fixed;left:16px;right:88px;bottom:calc(92px + env(safe-area-inset-bottom));z-index:6}
+.lbar button{width:100%;height:54px;border:0;border-radius:18px;background:var(--coral);color:#fff;font-size:17px;font-weight:800;box-shadow:0 8px 20px rgba(237,107,93,.45)}.lbar button:disabled{background:#D9CCC2;box-shadow:none}
+.lsp{height:150px}
 .orow1 .nm{flex:1;min-width:0;display:block}.orow1 .nm b{display:block;font-size:15px}.orow1 .nm em{display:block;font-style:normal;font-size:12.5px;color:var(--mut);white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .orow1 .src{flex:none;margin:0}
 .setrow{display:flex;align-items:center;gap:8px;padding:6px 0;font-size:14px;font-weight:600}
@@ -1622,22 +1632,22 @@ function renderLabels(){
   if(!S.data[0]) return `<div class="msg">${esc(S.err||'Cargando datos…')}</div>`;
   if(lblCol(S.data[0])<0) return `<div class="msg">No encontré la columna “Pedido ID ML” en la hoja de Mercado Libre.</div>`;
   if(!S.lstAt||Date.now()-S.lstAt>120000) setTimeout(lblStatusLoad,0);
-  const L=lblItems(), P=lblPrinted(); const have=new Set(L.concat(P).map(x=>x.n)); for(const n of [...S.lsel]) if(!have.has(n)) S.lsel.delete(n);
-  const lp=lblLP(), isP=n=>lblToday(lp[n])||(S.lst&&S.lst[n]&&S.lst[n].sub==='printed');
-  const row=x=>{ const on=S.lsel.has(x.n), D=x.D, rd=lblReady(x.n);
-    return `<button class="orow1" data-lbl="${esc(x.n)}" style="width:100%"><span class="nm"><b>${!rd?'⏳ ':isP(x.n)?'🖨 ':''}${esc(String(x.it.v[D.cols.cliente]||'(sin nombre)'))}</b><small style="display:block;opacity:.7">${rd?'':'Etiqueta aún no disponible · '}${esc(String(x.it.v[D.cols.diseno]||''))}</small></span><i>${on?'☑':'☐'}</i></button>` };
-  let last='', rows='';
-  for(const x of L){
-    if(x.st!==last){ last=x.st; rows+=`<div class="grp">${x.st==='emb'?'Para embalar':'Embalados, sin despachar'}</div>` }
-    rows+=row(x);
-  }
-  if(P.length) rows+=`<div class="grp">Impresas hoy<span>${P.length}</span></div>`+P.map(row).join('');
+  const lp=lblLP(), isP=n=>lblToday(lp[n])||!!(S.lst&&S.lst[n]&&S.lst[n].sub==='printed');
+  const L=lblItems(), P=lblAll().filter(x=>isP(x.n)&&(lblToday(lp[x.n])||x.st==='emb'||x.st==='desp'));
+  const todo=L.filter(x=>!isP(x.n));
+  const have=new Set(todo.concat(P).map(x=>x.n)); for(const n of [...S.lsel]) if(!have.has(n)) S.lsel.delete(n);
+  const row=(x,done)=>{ const on=S.lsel.has(x.n), D=x.D, rd=lblReady(x.n);
+    const sub=[x.st==='emb'?'Para embalar':x.st==='desp'?'Embalado':x.st==='enviado'?'Despachado':'', String(x.it.v[D.cols.diseno]||'')].filter(Boolean).join(' · ');
+    return `<button class="lrow ${on?'on':''} ${done?'done':''}" data-lbl="${esc(x.n)}"><span class="lck">${on?'✓':''}</span><span class="lnm"><b>${esc(String(x.it.v[D.cols.cliente]||'(sin nombre)'))}</b><small>${esc(sub)}</small></span>${!rd?'<span class="ltag w">⏳ sin etiqueta aún</span>':done?'<span class="ltag">🖨 Impresa</span>':''}</button>` };
   const n=S.lsel.size;
   return `<div class="hello" style="margin:0 2px 10px">Mercado Libre<b>Etiquetas</b></div>
-  <div class="chips" style="margin-bottom:8px"><button class="chip" data-lblall="emb">Todos los de embalar</button><button class="chip" data-lblall="all">Todos</button><button class="chip" data-lblall="none">Ninguno</button><button class="chip" data-lblref="1">${S.lstBusy?'…':'↻'}</button></div>
+  <div class="chips" style="margin-bottom:6px"><button class="chip" data-lblall="emb">Elegir todas las pendientes</button><button class="chip" data-lblall="none">Ninguna</button><button class="chip" data-lblref="1">${S.lstBusy?'…':'↻'}</button></div>
   ${S.lerr?`<div class="note" style="margin:0 2px 8px">${esc(S.lerr)}</div>`:''}
-  ${L.length||P.length?rows:'<div class="msg">No hay pedidos de Mercado Libre para embalar.</div>'}
-  <div style="position:sticky;bottom:78px;padding:10px 0"><button class="pri" data-lblgo="1" style="width:100%" ${n&&!S.lbusy?'':'disabled'}>${S.lbusy?'Generando…':n?`Exportar PDF (${n})`:'Elegí pedidos'}</button></div>`;
+  <div class="grp">Para imprimir<span>${todo.length}</span></div>
+  ${todo.length?todo.map(x=>row(x,false)).join(''):'<div class="msg" style="padding:14px 4px">Nada pendiente de imprimir.</div>'}
+  ${P.length?`<div class="grp">Impresas hoy<span>${P.length}</span></div>`+P.map(x=>row(x,true)).join(''):''}
+  <div class="lsp"></div>
+  <div class="lbar"><button data-lblgo="1" ${n&&!S.lbusy?'':'disabled'}>${S.lbusy?'Generando…':n?`Exportar PDF · ${n} ${n===1?'etiqueta':'etiquetas'}`:'Elegí pedidos para exportar'}</button></div>`;
 }
 async function lblExport(){
   if(S.lbusy||!S.lsel.size) return;
@@ -1660,7 +1670,7 @@ async function lblExport(){
 }
 function lblClick(t){
   const a=t.closest('[data-lbl]'); if(a){ const n=a.dataset.lbl; S.lsel.has(n)?S.lsel.delete(n):S.lsel.add(n); render({keep:true}); return true }
-  const b=t.closest('[data-lblall]'); if(b){ const m=b.dataset.lblall; S.lsel.clear(); if(m!=='none') lblItems().forEach(x=>{ if((m==='all'||x.st==='emb')&&lblReady(x.n)) S.lsel.add(x.n) }); render({keep:true}); return true }
+  const b=t.closest('[data-lblall]'); if(b){ const m=b.dataset.lblall; S.lsel.clear(); if(m!=='none') { const lp=lblLP(); lblItems().forEach(x=>{ const pr=lblToday(lp[x.n])||!!(S.lst&&S.lst[x.n]&&S.lst[x.n].sub==='printed'); if(!pr&&lblReady(x.n)) S.lsel.add(x.n) }) }; render({keep:true}); return true }
   if(t.closest('[data-lblref]')){ S.lstAt=0; lblStatusLoad(); return true }
   if(t.closest('[data-lblgo]')){ lblExport(); return true }
   return false;
@@ -2131,7 +2141,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v49';
+const APP_V='v50';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

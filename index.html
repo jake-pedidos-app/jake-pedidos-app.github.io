@@ -1264,9 +1264,9 @@ function render(opt={}){
       ${prod?'':'<button class="ibtn" data-act="newOrder" title="Nuevo pedido" aria-label="Nuevo pedido" style="margin-left:auto;font-size:22px">＋</button>'}<button class="ibtn wand" data-act="tour" title="Guía paso a paso" aria-label="Guía paso a paso" style="margin-left:${prod?'auto':'8px'}">🪄</button>
       </div>
     </header>
-    ${S.view==='pstart'?`<div id="home">${renderPStart()}</div>`:S.view==='stock'?renderStock():S.view==='reports'?`<div id="home">${renderReports()}</div>`:home?`<div id="home">${renderHome()}</div>`:S.view==='config'?`<div id="home">${S.mod==='prod'?renderConfigProd():renderConfig()}</div>`:renderSheets()}
+    ${S.view==='pstart'?`<div id="home">${renderPStart()}</div>`:S.view==='stock'?renderStock():S.view==='reports'?`<div id="home">${renderReports()}</div>`:S.view==='labels'?`<div id="home">${renderLabels()}</div>`:home?`<div id="home">${renderHome()}</div>`:S.view==='config'?`<div id="home">${S.mod==='prod'?renderConfigProd():renderConfig()}</div>`:renderSheets()}
     ${S.selMode?bulkBar():(S.view==='config'?'':'<button id="bell" title="Alertas">🔔'+(bellN()?'<i>'+bellN()+'</i>':'')+'</button>')+'<button id="mic" title="Hablar">🎤</button>'}
-    <nav>${prod?`<button class="${S.view==='pstart'?'on':''}" data-view="pstart"><b>⌂</b>Inicio</button><button class="${S.view==='stock'?'on':''}" data-view="stock"><b>📦</b>Stock</button><button class="${S.view==='config'?'on':''}" data-view="config"><b>⚙</b>Ajustes</button>`:`<button class="${home?'on':''}" data-view="home"><b>⌂</b>Inicio</button><button class="${S.view==='sheets'?'on':''}" data-view="sheets"><b>☰</b>Pedidos</button><button class="${S.view==='reports'?'on':''}" data-view="reports"><b>📊</b>Reportes</button><button class="${S.view==='config'?'on':''}" data-view="config"><b>⚙</b>Ajustes</button>`}</nav>`;
+    <nav>${prod?`<button class="${S.view==='pstart'?'on':''}" data-view="pstart"><b>⌂</b>Inicio</button><button class="${S.view==='stock'?'on':''}" data-view="stock"><b>📦</b>Stock</button><button class="${S.view==='config'?'on':''}" data-view="config"><b>⚙</b>Ajustes</button>`:`<button class="${home?'on':''}" data-view="home"><b>⌂</b>Inicio</button><button class="${S.view==='sheets'?'on':''}" data-view="sheets"><b>☰</b>Pedidos</button><button class="${S.view==='labels'?'on':''}" data-view="labels"><b>🏷</b>Etiquetas</button><button class="${S.view==='reports'?'on':''}" data-view="reports"><b>📊</b>Reportes</button><button class="${S.view==='config'?'on':''}" data-view="config"><b>⚙</b>Ajustes</button>`}</nav>`;
   // restaurar desplazamientos horizontales (chips y pestañas) para que no salten al inicio
   document.querySelectorAll('.chips,.tabs').forEach((el,i)=>{ if(scrolls[i]!=null) el.scrollLeft=scrolls[i] });
   const hh=document.querySelector('header').offsetHeight; document.documentElement.style.setProperty('--hh',hh+'px');
@@ -1577,6 +1577,59 @@ function rpOpts(){
   return {tams:u('tam').sort((a,b)=>oi(a)-oi(b)),fmts:u('fmt'),piezas:u('piezas')};
 }
 const RP_START=[['Despachados este mes · tamaño y formato',{preset:'month',basis:'envio',estados:['Despachado'],g1:'tam_fmt',g2:''}],['Para embalar · tamaño y formato',{preset:'all',basis:'pedido',estados:['Listo para embalar'],g1:'tam_fmt',g2:''}],['Pedidos del mes por tienda',{preset:'month',basis:'pedido',estados:[],g1:'tienda',g2:''}],['Pedidos por mes y tienda',{preset:'year',basis:'pedido',estados:[],g1:'mes',g2:'tienda'}]];
+/* ---------- Etiquetas Mercado Libre (solo lectura vía Apps Script) ---------- */
+const LBL_URL='https://script.google.com/macros/s/AKfycbyLZmeMx-iMAqxpayMLbAEbrRxVDKXzQfe3OcJZFHUthlFyD6X3VAOZYUouB3aJpB-s/exec';
+S.lsel=new Set(); S.lbusy=false;
+function lblItems(){
+  const D=S.data[0]; if(!D||D.cols.orden<0) return [];
+  const out=[];
+  for(const it of D.items){
+    const st=stage(it,D); if(st!=='emb'&&st!=='desp') continue; if(!inWin2(it,st)) continue;
+    const n=String(it.v[D.cols.orden]||'').replace(/\D/g,''); if(!n) continue;
+    out.push({n,st,it,D});
+  }
+  out.sort((a,b)=>(a.st===b.st?0:a.st==='emb'?-1:1)||((a.it.date||0)-(b.it.date||0)));
+  return out;
+}
+function renderLabels(){
+  if(!S.data[0]) return `<div class="msg">${esc(S.err||'Cargando datos…')}</div>`;
+  const L=lblItems(); const have=new Set(L.map(x=>x.n)); for(const n of [...S.lsel]) if(!have.has(n)) S.lsel.delete(n);
+  let last='', rows='';
+  for(const x of L){
+    if(x.st!==last){ last=x.st; rows+=`<div class="grp">${x.st==='emb'?'Para embalar':'Embalados, sin despachar'}</div>` }
+    const on=S.lsel.has(x.n), D=x.D;
+    rows+=`<button class="orow1" data-lbl="${esc(x.n)}" style="width:100%"><span class="nm"><b>${esc(String(x.it.v[D.cols.cliente]||'(sin nombre)'))}</b><small style="display:block;opacity:.7">#${esc(x.n)} · ${esc(String(x.it.v[D.cols.diseno]||''))}</small></span><i>${on?'☑':'☐'}</i></button>`;
+  }
+  const n=S.lsel.size;
+  return `<div class="hello" style="margin:0 2px 10px">Mercado Libre<b>Etiquetas</b></div>
+  <div class="chips" style="margin-bottom:8px"><button class="chip" data-lblall="emb">Todos los de embalar</button><button class="chip" data-lblall="all">Todos</button><button class="chip" data-lblall="none">Ninguno</button></div>
+  ${L.length?rows:'<div class="msg">No hay pedidos de Mercado Libre para embalar.</div>'}
+  <div style="position:sticky;bottom:78px;padding:10px 0"><button class="pri" data-lblgo="1" style="width:100%" ${n&&!S.lbusy?'':'disabled'}>${S.lbusy?'Generando…':n?`Exportar PDF (${n})`:'Elegí pedidos'}</button></div>`;
+}
+async function lblExport(){
+  if(S.lbusy||!S.lsel.size) return;
+  S.lbusy=true; render({keep:true});
+  try{
+    const tk=await getToken(false), nums=[...S.lsel]; let fails=[], k=0;
+    for(let i=0;i<nums.length;i+=50){
+      const part=nums.slice(i,i+50);
+      const r=await fetch(`${LBL_URL}?t=${encodeURIComponent(tk)}&o=${part.join(',')}`); const j=await r.json();
+      if(j.error) throw new Error(j.error);
+      fails=fails.concat(j.fail||[]);
+      const bin=atob(j.pdf), u=new Uint8Array(bin.length); for(let c=0;c<bin.length;c++) u[c]=bin.charCodeAt(c);
+      const dt=new Date(); k++;
+      await rpDeliver(new Blob([u],{type:'application/pdf'}),`etiquetas-ml-${dt.getFullYear()}${pad(dt.getMonth()+1)}${pad(dt.getDate())}${nums.length>50?'-'+k:''}.pdf`);
+    }
+    toast(fails.length?`Listo. Sin etiqueta: ${fails.length} (${fails.slice(0,3).join(', ')})`:'Etiquetas listas',fails.length?6000:2200);
+  }catch(e){ toast('No se pudo: '+e.message,6000) }
+  S.lbusy=false; render({keep:true});
+}
+function lblClick(t){
+  const a=t.closest('[data-lbl]'); if(a){ const n=a.dataset.lbl; S.lsel.has(n)?S.lsel.delete(n):S.lsel.add(n); render({keep:true}); return true }
+  const b=t.closest('[data-lblall]'); if(b){ const m=b.dataset.lblall; S.lsel.clear(); if(m!=='none') lblItems().forEach(x=>{ if(m==='all'||x.st==='emb') S.lsel.add(x.n) }); render({keep:true}); return true }
+  if(t.closest('[data-lblgo]')){ lblExport(); return true }
+  return false;
+}
 function renderReports(){
   if(!S.data[0]) return `<div class="msg">${esc(S.err||'Cargando datos…')}</div>`;
   const R=S.rp, T=rpTables(), O=rpOpts();
@@ -1929,6 +1982,7 @@ document.addEventListener('click',async e=>{
   const t=e.target;
   if(S.lpAt&&Date.now()-S.lpAt<900){ S.lpAt=0; e.preventDefault(); return }
   if(S.view==='reports'&&rpClick(t)) return;
+  if(S.view==='labels'&&lblClick(t)) return;
   const lg=t.closest('[data-lg]'); if(lg){ toast(lg.dataset.lg); return }
   if(t.closest('#bell')){ openBell(); return }
   if(t.closest('[data-tournew]')){ tourStart('neworder'); return }
@@ -2042,7 +2096,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v46';
+const APP_V='v47';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

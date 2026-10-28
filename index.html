@@ -192,7 +192,7 @@ button.alert{font-size:14px;color:var(--ink);font-family:inherit}
 .lrow.on .lck{background:var(--coral);border-color:var(--coral)}
 .lrow .lnm{flex:1;min-width:0}.lrow .lnm b{display:block;font-size:16px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.lrow .lnm small{display:block;color:var(--mut);font-size:13px;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .lrow.done{background:#F2F8F4}.lrow.done .lck{border-color:var(--ok)}
-.ltag{flex:0 0 auto;font-size:11px;font-weight:800;padding:3px 8px;border-radius:999px;background:#E3F3EA;color:var(--ok)}.ltag.w{background:#FFF0D2;color:#B7791F}
+.ltag{flex:0 0 auto;font-size:11px;font-weight:800;padding:3px 8px;border-radius:999px;background:#E3F3EA;color:var(--ok)}.ltag.w{background:#FFF0D2;color:#B7791F}.ltag.a{background:#FFF1D6;color:#9A6A00}.ltag.g{background:#E6F4EC;color:#2E7D56}.ltag.o{background:#F1ECE8;color:#8A7F78}.lrow.amb{background:#FFF8E6}.lrow.grn{background:#EEF8F2}
 .lbar{position:fixed;left:16px;right:88px;bottom:calc(92px + env(safe-area-inset-bottom));z-index:6}
 .lbar button{width:100%;height:54px;border:0;border-radius:18px;background:var(--coral);color:#fff;font-size:17px;font-weight:800;box-shadow:0 8px 20px rgba(237,107,93,.45)}.lbar button:disabled{background:#D9CCC2;box-shadow:none}
 .lsp{height:150px}
@@ -1599,7 +1599,7 @@ const lblSave=(k,o)=>ls.set(k,JSON.stringify(o));
 const lblToday=p=>{ if(!p) return false; const d=new Date(p); return !isNaN(d)&&d.toDateString()===new Date().toDateString() };
 const lblRel=n=>{ const e=S.lst&&S.lst[n], d=e&&(e.sl||e.mf); if(!d) return ''; const x=new Date(d); return isNaN(x)?'':x.toLocaleDateString('es-AR',{weekday:'short',day:'numeric',month:'numeric'}) };
 const lblReady=n=>{ const e=S.lst&&S.lst[n]; return !e||e.st!=='pending' };
-function lblIsP(n){ const lp=lblJ('lprint'), un=lblJ('lun'); if(un[n]) return false; return lblToday(lp[n])||!!(S.lst&&S.lst[n]&&S.lst[n].sub==='printed') }
+function lblIsP(n){ return !!lblJ('lprint')[n] }
 function lblCol(D){ return D.head.findIndex(h=>/pedido\s*id\s*ml/i.test(String(h))) }
 function lblAll(){
   const D=S.data[0]; if(!D) return []; const c=lblCol(D); if(c<0) return [];
@@ -1617,9 +1617,11 @@ function lblItems(){
 }
 function lblLists(){
   const hid=lblJ('lhide'), lp=lblJ('lprint'), vis=x=>!hid[x.n];
-  const todo=lblItems().filter(x=>vis(x)&&!lblIsP(x.n));
-  const done=lblAll().filter(x=>vis(x)&&lblIsP(x.n)&&(lblToday(lp[x.n])||x.st==='emb'||x.st==='desp'));
-  return {todo,done};
+  const todo=lblItems().filter(x=>vis(x)&&!lp[x.n]);
+  const all=lblAll().filter(vis);
+  const done=all.filter(x=>lblToday(lp[x.n]));
+  const old=all.filter(x=>lp[x.n]&&!lblToday(lp[x.n]));
+  return {todo,done,old};
 }
 async function lblStatusLoad(manual){
   if(S.lstBusy) return; S.lstBusy=true; S.lstAt=Date.now(); if(manual&&S.view==='labels') render({keep:true});
@@ -1644,25 +1646,36 @@ function renderLabels(){
   if(!S.data[0]) return `<div class="msg">${esc(S.err||'Cargando datos…')}</div>`;
   if(lblCol(S.data[0])<0) return `<div class="msg">No encontré la columna “Pedido ID ML” en la hoja de Mercado Libre.</div>`;
   if(!S.lstAt||Date.now()-S.lstAt>120000) setTimeout(lblStatusLoad,0);
-  const {todo,done}=lblLists(), sec=lblJ('lsec');
-  const have=new Set(todo.concat(done).map(x=>x.n)); for(const n of [...S.lsel]) if(!have.has(n)) S.lsel.delete(n);
+  const lp=lblJ('lprint'), lpg=lblJ('lpega'); let chg=false;
+  lblAll().forEach(x=>{ if(lp[x.n]&&x.st==='enviado'&&!lpg[x.n]){ lpg[x.n]=new Date().toISOString(); chg=true } });
+  if(chg) lblSave('lpega',lpg);
+  const {todo,done,old}=lblLists(), sec=lblJ('lsec');
+  const have=new Set(todo.concat(done,old).map(x=>x.n)); for(const n of [...S.lsel]) if(!have.has(n)) S.lsel.delete(n);
   const n=S.lsel.size;
-  const row=(x,isDone)=>{ const on=S.lsel.has(x.n), D=x.D, rd=lblReady(x.n);
+  const dstr=iso=>iso?new Date(iso).toLocaleDateString('es-AR',{day:'numeric',month:'numeric'}):'';
+  const row=(x,kind)=>{ const on=S.lsel.has(x.n), D=x.D, rd=lblReady(x.n), pegada=x.st==='enviado';
     const sub=[x.st==='emb'?'Para embalar':x.st==='desp'?'Embalado':x.st==='enviado'?'Despachado':'', String(x.it.v[D.cols.diseno]||'')].filter(Boolean).join(' · ');
-    const hr=isDone?'🗑 Descartar':'🖨 Imprimir', hl=isDone?'↩ Volver a pendientes':'✓ Marcar impresa';
-    return `<div class="lwrap"><div class="lhint r ${isDone?'d':''}">${hr}</div><div class="lhint l">${hl}</div><button class="lrow ${on?'on':''} ${isDone?'done':''}" data-lbl="${esc(x.n)}" data-lsw="${esc(x.n)}" data-lsec="${isDone?'done':'todo'}">${n?`<span class="lck">${on?'✓':''}</span>`:''}<span class="lnm"><b>${esc(String(x.it.v[D.cols.cliente]||'(sin nombre)'))}</b><small>${esc(sub)}</small></span>${!rd?`<span class="ltag w">⏳ ${lblRel(x.n)?'se libera '+esc(lblRel(x.n)):'sin etiqueta aún'}</span>`:isDone?'<span class="ltag">🖨 Impresa</span>':''}</button></div>` };
+    const cls=kind==='todo'?'':pegada?'grn':'amb';
+    const tag=kind==='todo'?(rd?'':`<span class="ltag w">⏳ ${lblRel(x.n)?'se libera '+esc(lblRel(x.n)):'sin etiqueta aún'}</span>`)
+      :kind==='old'?`<span class="ltag o">impresa ${dstr(lp[x.n])}</span>`
+      :pegada?`<span class="ltag g">✓ Pegada${lpg_(x.n)?' '+dstr(lpg_(x.n)):''}</span>`:'<span class="ltag a">🖨 Impresa</span>';
+    const hr=kind==='done'?'🗑 Descartar':'🖨 Imprimir', hl=kind==='todo'?'✓ Marcar impresa':'↩ Volver a pendientes';
+    const sw=kind==='old'?'':`data-lsw="${esc(x.n)}" data-lsec="${kind}"`;
+    return `<div class="lwrap"><div class="lhint r">${hr}</div><div class="lhint l">${hl}</div><button class="lrow ${cls} ${on?'on':''}" data-lbl="${esc(x.n)}" ${sw}>${n?`<span class="lck">${on?'✓':''}</span>`:''}<span class="lnm"><b>${esc(String(x.it.v[D.cols.cliente]||'(sin nombre)'))}</b><small>${esc(sub)}</small></span>${tag}</button></div>` };
   const head=(k,t,c)=>`<button class="lsech" data-lblsec="${k}"><span>${sec[k]?'▸':'▾'} ${t}</span><i>${c}</i></button>`;
   return `<div class="hello" style="margin:0 2px 8px">Mercado Libre<b>Etiquetas</b></div>
   <div class="note" style="margin:0 2px 8px;font-size:12.5px">Deslizá → para imprimir · ← para marcar como impresa · mantené apretado para elegir varias.</div>
   <div class="chips" style="margin-bottom:4px"><button class="chip" data-lblall="1">Elegir todas las pendientes</button>${n?`<button class="chip" data-lblall="none">Quitar selección (${n})</button>`:''}<button class="chip" data-lblref="1">${S.lstBusy?'Actualizando…':'↻ Actualizar'}</button></div>
   ${S.lerr?`<div class="note" style="margin:0 2px 8px">${esc(S.lerr)}</div>`:''}
   ${head('todo','Para imprimir',todo.length)}
-  ${sec.todo?'':(todo.length?todo.map(x=>row(x,false)).join(''):'<div class="msg" style="padding:14px 4px">Nada pendiente de imprimir.</div>')}
+  ${sec.todo?'':(todo.length?todo.map(x=>row(x,'todo')).join(''):'<div class="msg" style="padding:14px 4px">Nada pendiente de imprimir.</div>')}
   ${head('done','Impresas hoy',done.length)}
-  ${sec.done?'':done.map(x=>row(x,true)).join('')}
+  ${sec.done?'':(done.length?done.map(x=>row(x,'done')).join(''):'<div class="msg" style="padding:10px 4px">Todavía no imprimiste hoy.</div>')}
+  ${old.length?head('old','Impresas en días anteriores',old.length)+(sec.old?'':old.map(x=>row(x,'old')).join('')):''}
   <div class="lsp"></div>
   ${n?`<div class="lbar"><button data-lblgo="1" ${S.lbusy?'disabled':''}>${S.lbusy?'Generando…':`Exportar PDF · ${n} ${n===1?'etiqueta':'etiquetas'}`}</button></div>`:''}`;
 }
+const lpg_=n=>lblJ('lpega')[n];
 async function lblExport(only){
   if(S.lbusy) return;
   const sel=only||[...S.lsel]; if(!sel.length) return;
@@ -2196,7 +2209,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v52';
+const APP_V='v53';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

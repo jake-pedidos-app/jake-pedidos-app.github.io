@@ -433,6 +433,7 @@ async function loadAll(silent){
 const RA=(si,row,i)=>S.selMode?`data-sel="${si}:${row}"${S.sel.has(si+':'+row)?' data-ssel="1"':''}`:`data-sw="${si}:${row}${i==null?'':':'+i}" data-o="${si}:${row}"`;
 const inWin2=(it,st)=>inWindow(it)||((st==='emb'||st==='desp')&&recent(it));
 const recent=it=>it.date?(Date.now()-it.date.getTime())<=30*86400000:true;
+const ORDN=(si,it)=>{ const D=S.data[si]; const o=D&&D.cols.orden>=0?String(it.v[D.cols.orden]||'').trim():''; return o?'#'+esc(o):'' };
 const ONO=(it,D)=>{ const o=D.cols.orden>=0?String(it.v[D.cols.orden]||'').trim():''; return o?'#'+esc(o)+' · ':'' };
 const NM=(it,D)=>{ const n=esc(it.v[D.cols.cliente]||'(sin nombre)'); const o=D.cols.orden>=0?String(it.v[D.cols.orden]||'').trim():''; return n+(o?` <span class="ono">#${esc(o)}</span>`:'') };
 const ok = (it,c)=>c>=0&&(it.raw[c]===true||it.v[c]==='TRUE');
@@ -1001,7 +1002,7 @@ function cardHTML(si,D,it){
   return `<article class="card ${cancel?'cancel':''} ${sel?'sel':''}" ${S.selMode?`data-sel="${key}"`:`data-sw="${key}" data-card="${key}"`}>
     ${S.selMode?`<div class="selbox">${sel?'✓':''}</div>`:''}
     ${cancel?'<div class="badge-c">CANCELADO</div>':''}
-    <div class="cmeta"><span class="dpill ${cls}">${it.date?'📅':it.mdate?'✎':'📅'} ${dtxt}${it.date?` · ${ageTxt(it.date)}`:it.mdate?` · ${ageTxt(new Date(it.mdate))}`:''}</span>${fe}<span class="rt"><span class="src">${SHEETS[si].short}</span><small>#${it.row}</small></span></div>
+    <div class="cmeta"><span class="dpill ${cls}">${it.date?'📅':it.mdate?'✎':'📅'} ${dtxt}${it.date?` · ${ageTxt(it.date)}`:it.mdate?` · ${ageTxt(new Date(it.mdate))}`:''}</span>${fe}<span class="rt"><span class="src">${SHEETS[si].short}</span><small>${ORDN(si,it)}</small></span></div>
     <div class="cli"><span class="who">${g(D.cols.cliente)||'(sin nombre)'}</span>${S.selMode?'':`<button class="edit" data-e="${si}:${it.row}">✎ Editar</button>`}</div>
     <div class="t">${g(D.cols.diseno)||'(sin diseño)'}</div>
     <span class="tipo">${esc(t)}</span>
@@ -1299,7 +1300,7 @@ function openOrder(si,row){
   const D=S.data[si], it=findItem(si,row); if(!it) return;
   const sets=setsOf(it,D), multi=sets.length>1;
   const nt=D.cols.notas>=0?it.v[D.cols.notas]:'';
-  $('#sp').innerHTML=`<div class="ohead"><div><div class="ow">${NM(it,D)}</div><div class="od">${it.date?'📅 '+FD(it)+' · '+ageTxt(it.date):'Sin fecha'}</div></div><span class="src">${SHEETS[si].short} #${row}</span></div>
+  $('#sp').innerHTML=`<div class="ohead"><div><div class="ow">${NM(it,D)}</div><div class="od">${it.date?'📅 '+FD(it)+' · '+ageTxt(it.date):'Sin fecha'}</div></div><span class="src">${SHEETS[si].short}${ORDN(si,it)?' '+ORDN(si,it):''}</span></div>
   <div class="popsec" style="margin-top:6px">${multi?'Sets del pedido':'Pedido'} · deslizá → marcar · ← desmarcar</div>
   <div class="sets">${sets.map((x,k)=>`<div class="setbox" data-sw="${si}:${row}:${k}"><div class="setrow"><span class="tipo">${esc(x.tipo)}</span><b>${esc(x.design)}</b></div></div>`).join('')}
   ${multi?`<div class="setbox full" data-sw="${si}:${row}"><div class="setrow"><b>Pedido completo · ${esc(it.v[D.cols.cliente]||'')}</b></div></div>`:''}</div>
@@ -1316,7 +1317,7 @@ function openSwipe(si,row,i,mode){
   const all=FLAGS.filter(f=>D.cols[f.key]>=0);
   const list=all.filter(f=>mode==='mark'?!st(f):st(f));
   const sub=multiSet?setsOf(it,D)[i].design:(nSets(si,row)>1?'Todos los sets':tipo(it,D));
-  $('#sw2p').innerHTML=`<div class="ohead"><div><div class="ow">${NM(it,D)}</div><div class="od">${esc(sub)}</div></div><span class="src">${SHEETS[si].short} #${row}</span></div>
+  $('#sw2p').innerHTML=`<div class="ohead"><div><div class="ow">${NM(it,D)}</div><div class="od">${esc(sub)}</div></div><span class="src">${SHEETS[si].short}${ORDN(si,it)?' '+ORDN(si,it):''}</span></div>
   <div class="swhd ${mode}">${mode==='mark'?'✅ Marcar':'↩️ Desmarcar'}</div>
   ${list.length?`<div class="tg">${list.map(f=>`<button class="${mode==='mark'?'on':'off'}" data-sact="${si}:${row}:${multiSet?i:''}:${f.key}:${mode}">${f.label}</button>`).join('')}</div>`:`<div class="note" style="text-align:center;padding:12px">${mode==='mark'?'✓ Ya está todo marcado':'No hay nada marcado'}</div>`}
   <div class="row"><button class="pri" id="sw2x">Listo</button></div>`;
@@ -2209,7 +2210,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v53';
+const APP_V='v54';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

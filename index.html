@@ -431,7 +431,8 @@ async function loadAll(silent){
 
 /* ---------- Reglas ---------- */
 const RA=(si,row,i)=>S.selMode?`data-sel="${si}:${row}"${S.sel.has(si+':'+row)?' data-ssel="1"':''}`:`data-sw="${si}:${row}${i==null?'':':'+i}" data-o="${si}:${row}"`;
-const inWin2=(it,st)=>inWindow(it)||((st==='emb'||st==='desp')&&recent(it));
+/* Regla de Facu: un pedido listo para embalar (o embalado sin despachar) SIEMPRE aparece, sin importar la fecha ni el período elegido */
+const inWin2=(it,st)=>inWindow(it)||st==='emb'||st==='desp';
 const recent=it=>it.date?(Date.now()-it.date.getTime())<=30*86400000:true;
 const ORDN=(si,it)=>{ const D=S.data[si]; const o=D&&D.cols.orden>=0?String(it.v[D.cols.orden]||'').trim():''; return o?'#'+esc(o):'' };
 const ONO=(it,D)=>{ const o=D.cols.orden>=0?String(it.v[D.cols.orden]||'').trim():''; return o?'#'+esc(o)+' · ':'' };
@@ -862,7 +863,8 @@ function cfgLoad(){
 }
 let CFG=cfgLoad(); S.hf='emb';
 { const pf=ls.get('pfilter'), pt=ls.get('ptab'); if(pf&&FILTERS_OK.includes(pf)) S.filter=pf; if(pt!==null&&pt!==''&&!isNaN(+pt)&&+pt>=-1&&+pt<=2) S.tab=+pt }
-S.per=CFG.defPer;
+/* el último período elegido se recuerda; el "predeterminado" solo se usa si nunca se eligió uno */
+{ let sp=null; try{ sp=JSON.parse(ls.get('per')||'null') }catch(e){} S.per=(sp&&sp.k)?sp:CFG.defPer; }
 function cfgSave(){ ls.set('cfg',JSON.stringify(CFG)) }
 function cfgToggle(k){
   const [type,key]=k.split(':');
@@ -1621,8 +1623,9 @@ function lblLists(){
   const todo=lblItems().filter(x=>vis(x)&&!lp[x.n]);
   const all=lblAll().filter(vis);
   const done=all.filter(x=>lblToday(lp[x.n]));
-  const old=all.filter(x=>lp[x.n]&&!lblToday(lp[x.n]));
-  return {todo,done,old};
+  const old=[];
+  const hidl=lblAll().filter(x=>hid[x.n]).sort((a,b)=>String(hid[b.n]).localeCompare(String(hid[a.n])));
+  return {todo,done,old,hidl};
 }
 async function lblStatusLoad(manual){
   if(S.lstBusy) return; S.lstBusy=true; S.lstAt=Date.now(); if(manual&&S.view==='labels') render({keep:true});
@@ -1650,29 +1653,31 @@ function renderLabels(){
   const lp=lblJ('lprint'), lpg=lblJ('lpega'); let chg=false;
   lblAll().forEach(x=>{ if(lp[x.n]&&x.st==='enviado'&&!lpg[x.n]){ lpg[x.n]=new Date().toISOString(); chg=true } });
   if(chg) lblSave('lpega',lpg);
-  const {todo,done,old}=lblLists(), sec=lblJ('lsec');
-  const have=new Set(todo.concat(done,old).map(x=>x.n)); for(const n of [...S.lsel]) if(!have.has(n)) S.lsel.delete(n);
+  const {todo,done,old,hidl}=lblLists(), flt=lblJ('lflt');
+  const have=new Set(todo.concat(done,hidl).map(x=>x.n)); for(const n of [...S.lsel]) if(!have.has(n)) S.lsel.delete(n);
   const n=S.lsel.size;
   const dstr=iso=>iso?new Date(iso).toLocaleDateString('es-AR',{day:'numeric',month:'numeric'}):'';
   const row=(x,kind)=>{ const on=S.lsel.has(x.n), D=x.D, rd=lblReady(x.n), pegada=x.st==='enviado';
     const sub=[x.st==='emb'?'Para embalar':x.st==='desp'?'Embalado':x.st==='enviado'?'Despachado':'', String(x.it.v[D.cols.diseno]||'')].filter(Boolean).join(' · ');
     const cls=kind==='todo'?'':pegada?'grn':'amb';
-    const tag=kind==='todo'?(rd?'':`<span class="ltag w">⏳ ${lblRel(x.n)?'se libera '+esc(lblRel(x.n)):'sin etiqueta aún'}</span>`)
+    const tag=kind==='hid'?`<span class="ltag o" data-lblrest="${esc(x.n)}">↩ Recuperar</span>`:kind==='todo'?(rd?'':`<span class="ltag w">⏳ ${lblRel(x.n)?'se libera '+esc(lblRel(x.n)):'sin etiqueta aún'}</span>`)
       :kind==='old'?`<span class="ltag o">impresa ${dstr(lp[x.n])}</span>`
       :pegada?`<span class="ltag g">✓ Pegada${lpg_(x.n)?' '+dstr(lpg_(x.n)):''}</span>`:'<span class="ltag a">🖨 Impresa</span>';
-    const hr=kind==='done'?'🗑 Descartar':'🖨 Imprimir', hl=kind==='todo'?'✓ Marcar impresa':'↩ Volver a pendientes';
-    const sw=kind==='old'?'':`data-lsw="${esc(x.n)}" data-lsec="${kind}"`;
+    const hr=kind==='done'?'🗑 Descartar':kind==='hid'?'↩ Recuperar':'🖨 Imprimir', hl=kind==='todo'?'✓ Marcar impresa':kind==='hid'?'↩ Recuperar':'↩ Volver a pendientes';
+    const sw=`data-lsw="${esc(x.n)}" data-lsec="${kind}"`;
     return `<div class="lwrap"><div class="lhint r">${hr}</div><div class="lhint l">${hl}</div><button class="lrow ${cls} ${on?'on':''}" data-lbl="${esc(x.n)}" ${sw}>${n?`<span class="lck">${on?'✓':''}</span>`:''}<span class="lnm"><b>${esc(String(x.it.v[D.cols.cliente]||'(sin nombre)'))}</b><small>${esc(sub)}</small></span>${tag}</button></div>` };
-  const head=(k,t,c)=>`<button class="lsech" data-lblsec="${k}"><span>${sec[k]?'▸':'▾'} ${t}</span><i>${c}</i></button>`;
+  const head=(k,t,c)=>`<div class="lsech" style="pointer-events:none"><span>${t}</span><i>${c}</i></div>`;
+  const fchip=(k,t,c)=>`<button class="chip ${flt[k]?'on':''}" data-lblflt="${k}" ${flt[k]?'style="background:#1f6feb;color:#fff"':''}>${t} (${c})</button>`;
+  const anyF=!!(flt.done||flt.hid);
   return `<div class="hello" style="margin:0 2px 8px">Mercado Libre<b>Etiquetas</b></div>
   <div class="note" style="margin:0 2px 8px;font-size:12.5px">Deslizá → para imprimir · ← para marcar como impresa · mantené apretado para elegir varias.</div>
+  <div class="chips" style="margin-bottom:4px">${fchip('done','Impresas hoy',done.length)}${fchip('hid','Descartadas',hidl.length)}${anyF?'<button class="chip" data-lblflt="none">✕ Quitar filtros</button>':''}</div>
   <div class="chips" style="margin-bottom:4px"><button class="chip" data-lblall="1">Elegir todas las pendientes</button>${n?`<button class="chip" data-lblall="none">Quitar selección (${n})</button>`:''}<button class="chip" data-lblref="1">${S.lstBusy?'Actualizando…':'↻ Actualizar'}</button></div>
   ${S.lerr?`<div class="note" style="margin:0 2px 8px">${esc(S.lerr)}</div>`:''}
   ${head('todo','Para imprimir',todo.length)}
-  ${sec.todo?'':(todo.length?todo.map(x=>row(x,'todo')).join(''):'<div class="msg" style="padding:14px 4px">Nada pendiente de imprimir.</div>')}
-  ${head('done','Impresas hoy',done.length)}
-  ${sec.done?'':(done.length?done.map(x=>row(x,'done')).join(''):'<div class="msg" style="padding:10px 4px">Todavía no imprimiste hoy.</div>')}
-  ${old.length?head('old','Impresas en días anteriores',old.length)+(sec.old?'':old.map(x=>row(x,'old')).join('')):''}
+  ${todo.length?todo.map(x=>row(x,'todo')).join(''):'<div class="msg" style="padding:14px 4px">Nada pendiente de imprimir.</div>'}
+  ${flt.done?head('done','Impresas hoy',done.length)+(done.length?done.map(x=>row(x,'done')).join(''):'<div class="msg" style="padding:10px 4px">Todavía no imprimiste hoy.</div>'):''}
+  ${flt.hid?head('hid','Descartadas',hidl.length)+(hidl.length?hidl.map(x=>row(x,'hid')).join(''):'<div class="msg" style="padding:10px 4px">No hay etiquetas descartadas.</div>'):''}
   <div class="lsp"></div>
   ${n?`<div class="lbar"><button data-lblgo="1" ${S.lbusy?'disabled':''}>${S.lbusy?'Generando…':`Exportar PDF · ${n} ${n===1?'etiqueta':'etiquetas'}`}</button></div>`:''}`;
 }
@@ -1701,6 +1706,12 @@ async function lblExport(only){
   }catch(e){ toast('No se pudo: '+e.message,6000) }
   S.lbusy=false; render({keep:true}); S.lstAt=0; setTimeout(lblStatusLoad,2500);
 }
+function lblRecover(n){
+  const hid=lblJ('lhide'), lp=lblJ('lprint'), un=lblJ('lun'); delete hid[n]; lblSave('lhide',hid);
+  const x=lblAll().find(y=>y.n===n);
+  if(x&&(x.st==='emb'||x.st==='desp')){ delete lp[n]; un[n]=1; lblSave('lprint',lp); lblSave('lun',un) }
+  render({keep:true}); toast(x&&(x.st==='emb'||x.st==='desp')?'Recuperada: volvió a “Para imprimir”':'Etiqueta recuperada',2600);
+}
 function lblSwipe(n,secName,dir){
   const lp=lblJ('lprint'), un=lblJ('lun'), hid=lblJ('lhide');
   if(secName==='todo'&&dir==='r'){ lblExport([n]); return }
@@ -1710,12 +1721,14 @@ function lblSwipe(n,secName,dir){
   if(secName==='done'&&dir==='l'){
     delete lp[n]; un[n]=1; lblSave('lprint',lp); lblSave('lun',un); render({keep:true});
     toastAct('Volvió a pendientes','Deshacer',()=>{ const a=lblJ('lprint'), b=lblJ('lun'); a[n]=new Date().toISOString(); delete b[n]; lblSave('lprint',a); lblSave('lun',b); render({keep:true}) }); return }
+  if(secName==='hid'){ lblRecover(n); return }
   if(secName==='done'&&dir==='r'){
     hid[n]=new Date().toISOString(); lblSave('lhide',hid); S.lsel.delete(n); render({keep:true});
     toastAct('Descartada de la lista','Deshacer',()=>{ const h=lblJ('lhide'); delete h[n]; lblSave('lhide',h); render({keep:true}) }); return }
 }
 function lblClick(t){
-  const sc=t.closest('[data-lblsec]'); if(sc){ const k=sc.dataset.lblsec, s=lblJ('lsec'); s[k]=!s[k]; lblSave('lsec',s); render({keep:true}); return true }
+  const rs=t.closest('[data-lblrest]'); if(rs){ lblRecover(rs.dataset.lblrest); return true }
+  const fl=t.closest('[data-lblflt]'); if(fl){ const k=fl.dataset.lblflt, f=lblJ('lflt'); if(k==='none'){ delete f.done; delete f.hid } else f[k]=f[k]?0:1; lblSave('lflt',f); render({keep:true}); return true }
   const a=t.closest('[data-lbl]'); if(a){ if(S.lsel.size){ const n=a.dataset.lbl; S.lsel.has(n)?S.lsel.delete(n):S.lsel.add(n); render({keep:true}) } else toast('Deslizá la tarjeta, o mantené apretado para elegir',2500); return true }
   const b=t.closest('[data-lblall]'); if(b){
     S.lsel.clear();
@@ -2210,7 +2223,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v54';
+const APP_V='v56';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

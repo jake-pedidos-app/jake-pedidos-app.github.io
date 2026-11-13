@@ -243,6 +243,23 @@ button.fl{padding:7px 11px;font-size:12.5px}
 .rptbl{overflow-x:auto}.rptbl table{border-collapse:collapse;width:100%;font-size:13px}.rptbl th{text-align:left;font-size:11.5px;color:var(--mut);padding:6px 8px;border-bottom:1px solid #eadfd6;white-space:nowrap}.rptbl td{padding:7px 8px;border-bottom:1px solid #f3ece6;white-space:nowrap}.rptbl .n{text-align:right;font-variant-numeric:tabular-nums}.rptbl tr.tot td{font-weight:800;border-top:2px solid #eadfd6}
 .dsum{display:flex;justify-content:space-between;align-items:center;gap:8px;background:#fff;border-radius:16px;padding:12px 14px;margin:0 0 12px;box-shadow:0 1px 3px rgba(0,0,0,.06)}.dsum b{font-size:15px}.dsum span{font-size:13px;font-weight:700;color:var(--coral,#d9534f)}.ono{font-size:12px;font-weight:700;color:var(--coral,#d9534f);margin-left:4px}.orow1 .nm b,.orow1 .nm em{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}.orow1 .nm{min-width:0;flex:1}.lgd{width:16px;height:16px;border-radius:50%;border:0;padding:0}.lgd.st-sent{background:#BFE5CC}.lgd.st-pack{background:#E3F3E9;box-shadow:inset 0 0 0 1px #b9d9c4}.lgd.st-pend{background:#FFF0D2;box-shadow:inset 0 0 0 1px #ecd9a8}.lgd.st-warn{background:#FFD9B8}
 .orow1.st-warn{background:#FFD9B8;border-radius:14px;margin-bottom:6px;padding-left:10px;padding-right:10px;border:0}.lg.st-warn{background:#FFD9B8}
+/* v58: diseño compacto + degradé */
+.kpis{grid-template-columns:repeat(3,1fr);gap:8px}
+.kpi{padding:9px 11px;border-radius:16px}
+.kpi b{font-size:24px;margin-top:2px}
+.kpi span{font-size:11px;line-height:1.15;display:block}
+.kpi.act,.kpi.main,.perbox .chip.on,.chip.on{background:linear-gradient(135deg,#F7907C 0%,#ED6B5D 55%,#DE5446 100%);box-shadow:0 4px 12px rgba(237,107,93,.35)}
+.kpi.act{border:0}
+.dsum{padding:10px 14px}
+.perbox{padding:9px 14px;margin-bottom:8px}.perbox .chips{margin-top:8px}
+.ch{padding:10px 14px;margin-bottom:8px}
+.ch .r{padding-right:0}
+.ch .r .n{font-size:20px}
+.ch .r b{font-size:15px}
+.olist{margin:2px 0 0}
+.orow1{padding:9px 2px}
+.ch .note{padding:2px 0;margin:0;font-size:12.5px}
+.sec{margin:12px 4px 6px}
 </style>
 </head>
 <body>
@@ -2238,7 +2255,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v57';
+const APP_V='v58';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

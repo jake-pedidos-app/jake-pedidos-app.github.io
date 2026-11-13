@@ -260,6 +260,31 @@ button.fl{padding:7px 11px;font-size:12.5px}
 .orow1{padding:9px 2px}
 .ch .note{padding:2px 0;margin:0;font-size:12.5px}
 .sec{margin:12px 4px 6px}
+/* v59: degradé en TODOS los colores */
+.ibtn,.tab,.sec2,.edit,.th,.pchip,.sbtn,.mv,.orow1 .tp,.ch .go,.setbox.full,#tour .tb button.sk,.src,.grp span,.lsech i,.dpill{background:linear-gradient(135deg,#FEF6EF 0%,#FBE6D6 100%)}
+.tab.on,.tg button.on,.kpi.main,.alert button,#mic,.pri,.login button,.card.sel .selbox,.sw2.on,#tour .tb button,.popbig,.lrow.on .lck,.lbar button,.dots i.on,.chip.on,.perbox .chip.on,.kpi.act{background:linear-gradient(135deg,#F7907C 0%,#ED6B5D 55%,#DE5446 100%)}
+.tab.on,.tg button.on,.pri,.login button,.lbar button,.popbig,#mic{box-shadow:0 4px 12px rgba(237,107,93,.32)}
+.lbar button:disabled{background:linear-gradient(135deg,#E6DAD0,#D2C4B9)}
+.sw2::after{background:#fff}
+.tg button,.perbox .chip{background:linear-gradient(135deg,#FBF8F5,#F2EAE3)}
+.tg button.on,.perbox .chip.on{background:linear-gradient(135deg,#F7907C 0%,#ED6B5D 55%,#DE5446 100%)}
+/* verdes (completado / despachado) */
+.orow1.st-sent,.lg.st-sent,.lgd.st-sent{background:linear-gradient(135deg,#D6EEE0 0%,#A8DABD 100%)}
+.orow1.st-pack,.lg.st-pack,.lgd.st-pack{background:linear-gradient(135deg,#F1FAF5 0%,#D3EDDF 100%)}
+.orow1.st-pend,.lg.st-pend,.lgd.st-pend{background:linear-gradient(135deg,#FFF8E8 0%,#FFE5B5 100%)}
+.orow1.st-canc{background:linear-gradient(135deg,#FEEDEA 0%,#F9C6BD 100%)}
+.orow1.st-warn,.lg.st-warn,.lgd.st-warn{background:linear-gradient(135deg,#FFEAD6 0%,#FFCB9C 100%)}
+.dpill.grn,.dpill.sent,.ltag.g,.ltag,.lrow.grn,.lrow.done{background:linear-gradient(135deg,#EFFAF3 0%,#CBEBD9 100%)}
+.dpill.amb,.dpill.s-emb,.ltag.a,.ltag.w,.lrow.amb{background:linear-gradient(135deg,#FFF8E6 0%,#FFE6B8 100%)}
+.dpill.red,.card.cancel,.fl.on,.tg button.half,.tg button.off,#bulk .bb .ig{background:linear-gradient(135deg,#FEEDEA 0%,#FACBC3 100%)}
+.dpill.s-desp{background:linear-gradient(135deg,#EAF2FF 0%,#CBDFFF 100%)}
+.dpill.none,.dpill.old0,.dpill.s-prod,.ltag.o,.fl,.snum,.setbox{background:linear-gradient(135deg,#F7F3F0 0%,#E9E1DB 100%)}
+.lhint.r{background:linear-gradient(135deg,#5CBA8C,#3E9B6E)}.lhint.r.d{background:linear-gradient(135deg,#E2604F,#C0392B)}.lhint.l{background:linear-gradient(135deg,#A09690,#7A6F68)}
+.swh2.mk{background:linear-gradient(135deg,#DDF3E7,#B6E2CB)}.swh2.um{background:linear-gradient(135deg,#FBD9D3,#F4B3A9)}
+.badge-c,#bell i{background:linear-gradient(135deg,#E2604F,#C0392B)}
+#mic.rec{background:linear-gradient(135deg,#E2604F,#B03024)}
+.lrow.on{background:linear-gradient(135deg,#FEF6EF,#FBE6D6)}
+.orow1[data-ssel]{background:linear-gradient(135deg,#FFEDE7,#FFD6CB)!important}
 </style>
 </head>
 <body>
@@ -2255,7 +2280,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v58';
+const APP_V='v59';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

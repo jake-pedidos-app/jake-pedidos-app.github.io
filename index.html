@@ -439,9 +439,10 @@ const ONO=(it,D)=>{ const o=D.cols.orden>=0?String(it.v[D.cols.orden]||'').trim(
 const NM=(it,D)=>{ const n=esc(it.v[D.cols.cliente]||'(sin nombre)'); const o=D.cols.orden>=0?String(it.v[D.cols.orden]||'').trim():''; return n+(o?` <span class="ono">#${esc(o)}</span>`:'') };
 const ok = (it,c)=>c>=0&&(it.raw[c]===true||it.v[c]==='TRUE');
 function isCancel(it){return it.v.some(x=>/cancelad/i.test(String(x)))}
-function perBounds(){
-  const p=S.per||{k:'all'}, now=new Date(), d0=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime(), DAY=86400000;
+function perBounds(p0){
+  const p=p0||S.per||{k:'all'}, now=new Date(), d0=new Date(now.getFullYear(),now.getMonth(),now.getDate()).getTime(), DAY=86400000;
   if(p.k==='today') return [d0,Infinity];
+  if(p.k==='yday') return [d0-DAY,d0-1];
   if(p.k==='d3') return [d0-2*DAY,Infinity];
   if(p.k==='week'){ const wd=(now.getDay()+6)%7; return [d0-wd*DAY,Infinity] }
   if(p.k==='month') return [new Date(now.getFullYear(),now.getMonth(),1).getTime(),Infinity];
@@ -451,7 +452,7 @@ function perBounds(){
 }
 function perLabel(){ return perLabelOf(S.per) }
 function perLabelOf(p){
-  p=p||{}; const L={today:'Hoy',d3:'Últimos 3 días',week:'Esta semana',month:'Este mes',all:'Todo'};
+  p=p||{}; const L={today:'Hoy',yday:'Ayer',d3:'Últimos 3 días',week:'Esta semana',month:'Este mes',all:'Todo'};
   if(L[p.k]) return L[p.k]; if(p.k==='n') return p.n>0?`Últimos ${p.n} días`:'Todo';
   const f=x=>x?x.split('-').reverse().join('/'):'…'; return `${f(p.from)} → ${f(p.to)}`;
 }
@@ -1020,7 +1021,8 @@ function homeList(fk){
     const D=S.data[si], items=[]; if(!D) return {si,items,tipos:{}};
     for(const it of D.items){
       const st=stage(it,D); let okk=false;
-      if(fk==='hoy'){ const fe=D.cols.fenvio>=0?parseFecha(it.v[D.cols.fenvio],it.raw[D.cols.fenvio]):null; okk=st==='enviado'&&!!fe&&fe.toDateString()===today }
+      if(fk==='hoyp'){ const fe=D.cols.fenvio>=0?parseFecha(it.v[D.cols.fenvio],it.raw[D.cols.fenvio]):null, [pa,pb]=perBounds(S.hper||{k:'today'}); okk=st==='enviado'&&!!fe&&fe.getTime()>=pa&&fe.getTime()<=pb }
+      else if(fk==='hoy'){ const fe=D.cols.fenvio>=0?parseFecha(it.v[D.cols.fenvio],it.raw[D.cols.fenvio]):null; okk=st==='enviado'&&!!fe&&fe.toDateString()===today }
       else { if(!inWin2(it,st)) continue;
         okk=fk==='emb'?st==='emb':fk==='desp'?st==='desp':fk==='prod'?st==='prod':fk==='canc'?st==='canc':fk==='late'?isLate(it,st):fk==='nopago'?isNoPago(it,D,st):false }
       if(okk) items.push(it);
@@ -1102,9 +1104,10 @@ function renderHome(){
     },
     sheets:()=>{
       const fk=S.hf||'emb', L=homeList(fk).filter(l=>CFG.sheets[l.si]); if(!L.length) return '';
+      L.sort((a,b)=>(a.items.length?0:1)-(b.items.length?0:1)); // las planillas sin pendientes pasan al fondo (orden estable)
       return `<div class="sec">${HTITLE[fk]} por planilla</div>`+L.map(l=>{
         const D=S.data[l.si];
-        return `<div class="ch"><div class="r"><b>${SHEETS[l.si].label}</b><span class="n">${l.items.length}</span></div>`+
+        return `<div class="ch" ${l.items.length?'':'style="opacity:.45;filter:grayscale(1)"'}><div class="r"><b>${SHEETS[l.si].label}</b><span class="n">${l.items.length}</span></div>`+
           (l.items.length?`<div class="olist">${[...l.items].map(it=>`<button class="orow1" ${RA(l.si,it.row)}><span class="tp">${esc(tipo(it,D))}</span><span class="nm"><b>${esc(it.v[D.cols.cliente]||'(sin nombre)')}</b><em>${ONO(it,D)}${esc(setsOf(it,D).map(x=>x.design).join(' + '))}</em></span><small>${FD(it)}</small><i>›</i></button>`).join('')}</div>`:'<div class="note">Nada en esta lista</div>')+
           `</div>`;
       }).join('');
@@ -1132,8 +1135,8 @@ function renderHome(){
     },
     period:()=>`${perUI(true)}${S.loadedAt?`<div class="note" style="margin:-6px 4px 10px">Actualizado ${new Date(S.loadedAt).toLocaleTimeString('es-AR',{hour:'2-digit',minute:'2-digit'})}</div>`:''}`
   };
-  const hl=homeList('hoy'), htot=hl.reduce((a,l)=>a+l.items.length,0);
-  const hsum=`<div class="dsum"><button class="dsb" data-hoy="all"><b>Hoy despachaste ${htot}</b></button><span>${hl.map(l=>`<button class="dsc" data-hoy="${l.si}">${l.items.length} ${SHEETS[l.si].short}</button>`).join('<i>·</i>')}</span></div>`;
+  const hl=homeList('hoyp'), htot=hl.reduce((a,l)=>a+l.items.length,0), hpk=(S.hper&&S.hper.k)||'today';
+  const hsum=`<div class="dsum"><button class="dsb" data-hoy="all"><b><u data-hoyper="1" style="text-decoration:underline dotted;text-underline-offset:3px">${hpk==='today'?'Hoy':esc(perLabelOf(S.hper))} ▾</u> despachaste ${htot}</b></button><span>${hl.map(l=>`<button class="dsc" data-hoy="${l.si}">${l.items.length} ${SHEETS[l.si].short}</button>`).join('<i>·</i>')}</span></div>`;
   return hsum+CFG.order.filter(k=>!CFG.hide[k]&&k!=='alerts').map(k=>parts[k]?parts[k]():'').join('');
 }
 function renderConfigProd(){
@@ -1262,9 +1265,18 @@ function openBell(){
    '<div class="row"><button class="sec2" id="cx">Cerrar</button><button class="sec2" data-act="bellread">Marcar como leídas</button></div>';
   $('#sheet').classList.add('on'); $('#sheet').dataset.mode='pop';
 }
+function openHoyPer(){
+  const p=S.hper||{k:'today'}, on=(k,n)=>p.k===k&&(n===undefined||p.n===n)?'on':'';
+  const pre=[['today','Hoy'],['yday','Ayer'],['d3','Últimos 3 días'],['week','Esta semana'],['n:14','14 días'],['month','Este mes'],['n:30','30 días']];
+  $('#sp').innerHTML=`<div class="pophd">📅 ¿Qué período querés ver?</div><div class="chips" style="flex-wrap:wrap;margin:8px 0">${pre.map(([k,l])=>{const [kk,nn]=k.split(':');return `<button class="chip ${on(kk,nn?+nn:undefined)}" data-hper="${k}">${l}</button>`}).join('')}</div>
+  <div class="popsec">Fecha personalizada</div><div class="perx"><label>Desde <input type="date" id="hpf" value="${p.k==='custom'?p.from||'':''}"></label><label>hasta <input type="date" id="hpt" value="${p.k==='custom'?p.to||'':''}"></label></div>
+  <div class="row"><button class="sec2" id="cx">Cerrar</button><button class="chip on" data-hpapply="1" style="margin-left:8px">Aplicar fechas</button></div>`;
+  $('#sheet').classList.add('on'); $('#sheet').dataset.mode='pop';
+}
+function setHper(o){ S.hper=o; $('#sheet').classList.remove('on'); render({keep:true}) }
 function openHoy(which){
-  const hl=homeList('hoy').filter(l=>which==='all'||l.si===+which), tot=hl.reduce((a,l)=>a+l.items.length,0);
-  $('#sp').innerHTML=`<div class="pophd">📦 Despachados hoy · ${tot}</div>`+(tot?hl.filter(l=>l.items.length).map(l=>{const D=S.data[l.si]; return `<div class="popsec">${SHEETS[l.si].label} · ${l.items.length}</div><div class="olist">${l.items.map(it=>`<button class="orow1" data-o="${l.si}:${it.row}"><span class="tp">${esc(tipo(it,D))}</span><span class="nm"><b>${esc(it.v[D.cols.cliente]||'(sin nombre)')}</b><em>${ONO(it,D)}${esc(setsOf(it,D).map(x=>x.design).join(' + '))}</em></span><i>›</i></button>`).join('')}</div>`}).join(''):'<div class="note" style="text-align:center;padding:14px">Todavía no despachaste nada hoy.</div>')+'<div class="row"><button class="sec2" id="cx">Cerrar</button></div>';
+  const hl=homeList('hoyp').filter(l=>which==='all'||l.si===+which), tot=hl.reduce((a,l)=>a+l.items.length,0), plab=(S.hper&&S.hper.k!=='today')?perLabelOf(S.hper):'hoy';
+  $('#sp').innerHTML=`<div class="pophd">📦 Despachados ${esc(plab)} · ${tot}</div>`+(tot?hl.filter(l=>l.items.length).map(l=>{const D=S.data[l.si]; return `<div class="popsec">${SHEETS[l.si].label} · ${l.items.length}</div><div class="olist">${l.items.map(it=>`<button class="orow1" data-o="${l.si}:${it.row}"><span class="tp">${esc(tipo(it,D))}</span><span class="nm"><b>${esc(it.v[D.cols.cliente]||'(sin nombre)')}</b><em>${ONO(it,D)}${esc(setsOf(it,D).map(x=>x.design).join(' + '))}</em></span><i>›</i></button>`).join('')}</div>`}).join(''):'<div class="note" style="text-align:center;padding:14px">No despachaste nada en este período.</div>')+'<div class="row"><button class="sec2" id="cx">Cerrar</button></div>';
   $('#sheet').classList.add('on'); $('#sheet').dataset.mode='pop';
 }
 function render(opt={}){
@@ -2117,6 +2129,9 @@ document.addEventListener('click',async e=>{
   if(t.id==='nwsave'){ nwSave(); return }
   const bg=t.closest('[data-bellgo]'); if(bg){ $('#sheet').classList.remove('on'); S.view='sheets';S.tab=ALL;S.filter=bg.dataset.bellgo;S.q='';S.limit=60;S.focusQ=false;render({top:true});return }
   if(t.closest('#sheet [data-sk]')) $('#sheet').classList.remove('on');
+  if(t.closest('[data-hoyper]')){ openHoyPer(); return }
+  const hpp=t.closest('[data-hper]'); if(hpp){ const [k,n]=hpp.dataset.hper.split(':'); setHper(n?{k,n:+n}:{k}); return }
+  if(t.closest('[data-hpapply]')){ const f=$('#hpf').value, to=$('#hpt').value; if(!f&&!to){ toast('Elegí al menos una fecha',2500); return } setHper({k:'custom',from:f,to:to||f}); return }
   const hy=t.closest('[data-hoy]'); if(hy){ openHoy(hy.dataset.hoy); return }
   const bi=t.closest('[data-bulkign]'); if(bi){ const ks=[...S.sel]; const done=ignorar(ks); S.sel.clear(); S.selMode=false; render({keep:true}); notifyBadge(); if(done.length) toastAct(`🚫 ${done.length} pedido(s) ignorados`,'Deshacer',()=>{ designorar(done); render({keep:true}); notifyBadge() }); return }
   const i1=t.closest('[data-ign1]'); if(i1){ const k=i1.dataset.ign1; const done=ignorar([k]); $('#sheet').classList.remove('on'); render({keep:true}); notifyBadge(); if(done.length) toastAct('🚫 Pedido ignorado','Deshacer',()=>{ designorar(done); render({keep:true}); notifyBadge() }); return }
@@ -2223,7 +2238,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v56';
+const APP_V='v57';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());

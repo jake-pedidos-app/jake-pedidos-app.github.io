@@ -1667,9 +1667,14 @@ function lblAll(){
   }
   return out;
 }
+const lblRecent=x=>{ const d=x.it.date||(x.it.mdate?new Date(x.it.mdate):null); return !!d&&Date.now()-d.getTime()<45*86400000 };
+// en producción: solo si es reciente y Mercado Libre ya tiene la etiqueta lista para imprimir
+const lblProdOk=x=>lblRecent(x)&&!!(S.lst&&S.lst[x.n])&&S.lst[x.n].st!=='pending';
 function lblItems(){
-  const out=lblAll().filter(x=>(x.st==='emb'||x.st==='desp')&&inWin2(x.it,x.st));
-  out.sort((a,b)=>(a.st===b.st?0:a.st==='emb'?-1:1)||((a.it.date||0)-(b.it.date||0)));
+  // incluye también los que siguen en producción: si la etiqueta ya se puede imprimir, se imprime todo junto al principio
+  const out=lblAll().filter(x=>(x.st==='emb'||x.st==='desp')?inWin2(x.it,x.st):(x.st==='prod'&&lblProdOk(x)));
+  const rk={emb:0,desp:1,prod:2};
+  out.sort((a,b)=>(a.st===b.st?0:rk[a.st]-rk[b.st])||((a.it.date||0)-(b.it.date||0)));
   return out;
 }
 function lblLists(){
@@ -1686,12 +1691,17 @@ async function lblStatusLoad(manual){
   try{
     const D=S.data[0]; if(!D) return;
     const day=new Date(); day.setDate(day.getDate()-2); day.setHours(0,0,0,0);
-    const nums=lblAll().filter(x=>{ if(x.st==='emb'||x.st==='desp') return true; if(x.st!=='enviado'||D.cols.fenvio<0) return false; const fe=parseFecha(x.it.v[D.cols.fenvio],x.it.raw[D.cols.fenvio]); return fe&&fe>=day }).map(x=>x.n).slice(0,50);
+    const nums=lblAll().filter(x=>{ if(x.st==='emb'||x.st==='desp') return true; if(x.st==='prod') return lblRecent(x); if(x.st!=='enviado'||D.cols.fenvio<0) return false; const fe=parseFecha(x.it.v[D.cols.fenvio],x.it.raw[D.cols.fenvio]); return fe&&fe>=day }).map(x=>x.n).slice(0,200);
     if(!nums.length){ S.lst={}; return }
     const tk=await getToken(false);
-    const r=await fetch(`${LBL_URL}?a=st&t=${encodeURIComponent(tk)}&o=${nums.join(',')}`); const j=await r.json();
-    if(j.error) throw new Error(j.error);
-    const m={}; (j.list||[]).forEach(e=>{ m[e.n]=e }); S.lst=m; S.lerr='';
+    const m={}, all=[];
+    for(let i=0;i<nums.length;i+=50){
+      const r=await fetch(`${LBL_URL}?a=st&t=${encodeURIComponent(tk)}&o=${nums.slice(i,i+50).join(',')}`); const j=await r.json();
+      if(j.error) throw new Error(j.error);
+      (j.list||[]).forEach(e=>{ m[e.n]=e; all.push(e) });
+    }
+    S.lst=m; S.lerr='';
+    const j={list:all};
     const lp=lblJ('lprint'), now=new Date().toISOString(), cut=Date.now()-3*86400000; let ch=false;
     for(const e of (j.list||[])){ if((e.sub==='printed'||e.p)&&!lp[e.n]){ lp[e.n]=e.p||now; ch=true } }
     for(const k in lp){ if(new Date(lp[k]).getTime()<cut){ delete lp[k]; ch=true } }
@@ -1712,7 +1722,7 @@ function renderLabels(){
   const n=S.lsel.size;
   const dstr=iso=>iso?new Date(iso).toLocaleDateString('es-AR',{day:'numeric',month:'numeric'}):'';
   const row=(x,kind)=>{ const on=S.lsel.has(x.n), D=x.D, rd=lblReady(x.n), pegada=x.st==='enviado';
-    const sub=[x.st==='emb'?'Para embalar':x.st==='desp'?'Embalado':x.st==='enviado'?'Despachado':'', String(x.it.v[D.cols.diseno]||'')].filter(Boolean).join(' · ');
+    const sub=[x.st==='prod'?'En producción':x.st==='emb'?'Para embalar':x.st==='desp'?'Embalado':x.st==='enviado'?'Despachado':'', String(x.it.v[D.cols.diseno]||'')].filter(Boolean).join(' · ');
     const cls=kind==='todo'?'':pegada?'grn':'amb';
     const tag=kind==='hid'?`<span class="ltag o" data-lblrest="${esc(x.n)}">↩ Recuperar</span>`:kind==='todo'?(rd?'':`<span class="ltag w">⏳ ${lblRel(x.n)?'se libera '+esc(lblRel(x.n)):'sin etiqueta aún'}</span>`)
       :kind==='old'?`<span class="ltag o">impresa ${dstr(lp[x.n])}</span>`
@@ -2280,7 +2290,7 @@ document.addEventListener('change',e=>{
   if(id==='pn'){ const n=+e.target.value; if(n>0) setPer({k:'n',n}) }
   if(id==='pf'||id==='pt'){ const f=document.getElementById('pf').value, t=document.getElementById('pt').value; if(f||t) setPer({k:'custom',from:f,to:t}) }
 });
-const APP_V='v59';
+const APP_V='v60';
 async function checkUpdate(){
   try{
     const h=await fetch('index.html?'+Date.now(),{cache:'no-store'}).then(r=>r.text());
